@@ -76,7 +76,7 @@ function translate(tx: number, ty: number): Mat3 {
   return [1, 0, tx, 0, 1, ty, 0, 0, 1];
 }
 
-// Normalized image coords (0..1) -> centered "square" coords where rotation is
+// Normalized image coords (0..1) -> centred "square" coords where rotation is
 // circular: X = (x-0.5)*aspect, Y = (y-0.5). Returns [A, Ainv].
 function squareBasis(aspect: number): [Mat3, Mat3] {
   const A: Mat3 = [aspect, 0, -0.5 * aspect, 0, 1, -0.5, 0, 0, 1];

@@ -168,7 +168,7 @@ export function addRangeComponent(kind: "lumRange" | "colorRange"): void {
   }
   addMask({
     id: genId("mask"),
-    name: kind === "lumRange" ? "Luminance" : "Color",
+    name: kind === "lumRange" ? "Luminance" : "Colour",
     visible: true,
     invert: false,
     opacity: 100,

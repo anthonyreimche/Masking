@@ -48,7 +48,31 @@ function projectToScreen(rect: Rect, crop: CropRect, forward: Mat3, sx: number, 
   return { x: rect.x + ox * rect.w, y: rect.y + oy * rect.h };
 }
 
-const radiusOnScreen = (rect: Rect, crop: CropRect, r: number) => (r / crop.height) * rect.h;
+/** A disc as drawn on screen: semi-axes in px, turn in degrees. */
+interface ScreenDisc {
+  rx: number;
+  ry: number;
+  angle: number;
+}
+
+// The screen size of the photo's disc of radius r (image-height units) at
+// (sx, sy). The transform scales each axis on its own (Aspect, Perspective),
+// so a dab that paints round in the photo can be an ellipse on screen: its
+// axes are the singular values of the map the disc's two radii go through.
+function discOnScreen(toScreen: (sx: number, sy: number) => { x: number; y: number }, sx: number, sy: number, r: number, imageAspect: number): ScreenDisc {
+  const c = toScreen(sx, sy);
+  const ex = toScreen(sx + r / imageAspect, sy);
+  const ey = toScreen(sx, sy + r);
+  const m00 = ex.x - c.x, m01 = ey.x - c.x, m10 = ex.y - c.y, m11 = ey.y - c.y;
+  const e = (m00 + m11) / 2, f = (m00 - m11) / 2, g = (m10 + m01) / 2, h = (m10 - m01) / 2;
+  const q = Math.hypot(e, h), w = Math.hypot(f, g);
+  const angle = ((Math.atan2(g, f) + Math.atan2(h, e)) / 2) * (180 / Math.PI);
+  return { rx: q + w, ry: Math.abs(q - w), angle };
+}
+
+// A small radius to measure the transform's local scale with; the ring scales
+// it to the brush size, so resizing the brush maps nothing.
+const PROBE_RADIUS = 0.01;
 
 const HIT = 13; // px handle hit radius (generous grips)
 const ROT_OFFSET = 0.06; // rotate-handle gap beyond the ellipse top (q-units)
@@ -513,6 +537,13 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
   };
 
   const Outlines = memoOutlines();
+  // Screen px per image-height unit of a dab at the view's centre: the brush
+  // ring keeps it while it follows the pointer, so a hover maps nothing.
+  const ringScale = React.useMemo(() => {
+    const c = toSource(rect.x + rect.w / 2, rect.y + rect.h / 2);
+    const d = discOnScreen(toScreen, c.x, c.y, PROBE_RADIUS, imageAspect);
+    return { rx: d.rx / PROBE_RADIUS, ry: d.ry / PROBE_RADIUS, angle: d.angle };
+  }, [rect, crop, forward, inv, imageAspect]);
 
   return (
     <div
@@ -537,7 +568,7 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
             imageAspect={imageAspect}
           />
         )}
-        <ToolCursors pointer={pointer} rect={rect} crop={crop} />
+        <ToolCursors pointer={pointer} rect={rect} ringScale={ringScale} />
       </svg>
     </div>
   );
@@ -626,19 +657,25 @@ const memoOutlines = () => (MemoOutlines ??= React.memo(MaskOutlines));
 interface ToolCursorsProps {
   pointer: PointerStore;
   rect: Rect;
-  crop: CropRect;
+  ringScale: ScreenDisc;
 }
 
 // Re-renders on every pointer move, so it holds only what follows the pointer
 // or is cheap to draw.
-function ToolCursors({ pointer, rect, crop }: ToolCursorsProps) {
+function ToolCursors({ pointer, rect, ringScale }: ToolCursorsProps) {
   const { at } = React.useSyncExternalStore(pointer.subscribe, pointer.get);
   const { activeTool, maskToolType, brushErase, maskCompMode, brushSize, brushFeather, brushPreview } = useMaskTool();
 
   const brushing = activeTool === "mask" && maskToolType === "brush";
   const brushRing = brushing ? at : null;
   // Reactive so the cursor ring resizes the instant [ / ] change the size.
-  const brushPx = radiusOnScreen(rect, crop, brushSize);
+  const ring = (x: number, y: number, scale: number, min: number) => ({
+    cx: x,
+    cy: y,
+    rx: Math.max(min, ringScale.rx * brushSize * scale),
+    ry: Math.max(min, ringScale.ry * brushSize * scale),
+    transform: `rotate(${ringScale.angle} ${x} ${y})`,
+  });
   const subErase = at?.alt || brushErase || maskCompMode === "subtract";
   // Centre reference circle shown while a brush slider is dragged.
   const showBrushRef = brushPreview && brushing;
@@ -650,10 +687,8 @@ function ToolCursors({ pointer, rect, crop }: ToolCursorsProps) {
     <>
       {brushRing && (
         <g>
-          <circle
-            cx={brushRing.x}
-            cy={brushRing.y}
-            r={Math.max(3, brushPx)}
+          <ellipse
+            {...ring(brushRing.x, brushRing.y, 1, 3)}
             fill="none"
             stroke={ringColour}
             strokeWidth={1.2}
@@ -661,14 +696,14 @@ function ToolCursors({ pointer, rect, crop }: ToolCursorsProps) {
             opacity={0.9}
           />
           {/* Inner ring shows the feathered core. */}
-          <circle cx={brushRing.x} cy={brushRing.y} r={Math.max(1, brushPx * (1 - brushFeather))} fill="none" stroke={ringColour} strokeWidth={0.6} opacity={0.4} />
+          <ellipse {...ring(brushRing.x, brushRing.y, 1 - brushFeather, 1)} fill="none" stroke={ringColour} strokeWidth={0.6} opacity={0.4} />
         </g>
       )}
       {/* Centre reference while dragging the brush sliders. */}
       {showBrushRef && (
         <g opacity={0.8}>
-          <circle cx={refCx} cy={refCy} r={Math.max(3, brushPx)} fill="none" stroke="#fff" strokeWidth={1.2} />
-          <circle cx={refCx} cy={refCy} r={Math.max(1, brushPx * (1 - brushFeather))} fill="none" stroke="#fff" strokeWidth={0.6} opacity={0.5} />
+          <ellipse {...ring(refCx, refCy, 1, 3)} fill="none" stroke="#fff" strokeWidth={1.2} />
+          <ellipse {...ring(refCx, refCy, 1 - brushFeather, 1)} fill="none" stroke="#fff" strokeWidth={0.6} opacity={0.5} />
         </g>
       )}
     </>

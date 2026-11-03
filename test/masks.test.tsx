@@ -333,7 +333,7 @@ describe("the panel", () => {
     it("adds a colour range to the mask as an intersect, as one step", () => {
       draw();
       fireEvent.click(button("+ Add Component ▾"));
-      fireEvent.click(item("Color Range"));
+      fireEvent.click(item("Colour Range"));
       expect(masks()[0].components.map((c) => [c.kind, c.mode])).toEqual([
         ["radial", "add"],
         ["lumRange", "add"],

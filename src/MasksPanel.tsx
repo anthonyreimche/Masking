@@ -38,7 +38,7 @@ const GEO_TOOLS: { type: MaskType; label: string }[] = [
 // Parametric ranges: created instantly (no canvas drag).
 const RANGE_TOOLS: { kind: "lumRange" | "colorRange"; label: string }[] = [
   { kind: "lumRange", label: "Luminance Range" },
-  { kind: "colorRange", label: "Color Range" },
+  { kind: "colorRange", label: "Colour Range" },
 ];
 
 const KIND_ICON: Record<MaskComponentKind, string> = {
@@ -53,7 +53,7 @@ const KIND_LABEL: Record<MaskComponentKind, string> = {
   linear: "Linear",
   brush: "Brush",
   lumRange: "Luminance",
-  colorRange: "Color",
+  colorRange: "Colour",
 };
 
 // Mode chip glyph + colour. add = union, subtract = carve, intersect = confine.
@@ -677,14 +677,14 @@ function ComponentControls({ maskId, comp }: { maskId: string; comp: MaskCompone
   if (comp.kind === "colorRange" && comp.colorRange) {
     const g = comp.colorRange;
     const set = (patch: Partial<typeof g>) => updateComponent(maskId, comp.id, { colorRange: { ...g, ...patch } });
-    const commit = () => void commitEdit("Color Range");
+    const commit = () => void commitEdit("Colour Range");
     // Approximate display swatch from the stored linear target.
     const lin2srgb = (v: number) => Math.round((v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255);
     const swatch = `rgb(${lin2srgb(g.r)}, ${lin2srgb(g.g)}, ${lin2srgb(g.b)})`;
     return (
       <div className={cls.ranges}>
         <div className={cls.head}>
-          <span className={cls.caption}>Color range</span>
+          <span className={cls.caption}>Colour range</span>
           <button
             type="button"
             onClick={() => setMaskTool({ activeTool: "mask", maskColorPicking: !maskColorPicking })}

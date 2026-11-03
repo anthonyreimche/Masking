@@ -6,7 +6,7 @@ range masks.
 
 - **+ Create Mask** starts a mask. **Radial** and **Linear** are drawn by
   dragging on the photo; **Brush** is painted. **Luminance Range** and
-  **Color Range** are made at once, from the photo's tones or colours.
+  **Colour Range** are made at once, from the photo's tones or colours.
 - Drag a radial from corner to corner, or from its centre with Alt; Shift
   keeps it a circle. Shift snaps a linear gradient to 0, 45 or 90°.
 - A selected radial has handles: the centre moves it, the side handles size
