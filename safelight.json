@@ -1,7 +1,7 @@
 {
   "id": "safelight.masks",
   "name": "Masking",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Local adjustments with brush, linear, radial, luminance and colour range masks.",
   "author": "Anthony Reimche",
   "main": "dist/index.js",

@@ -280,7 +280,7 @@ function I(e) {
 		});
 	} else N({
 		id: O("mask"),
-		name: e === "lumRange" ? "Luminance" : "Color",
+		name: e === "lumRange" ? "Luminance" : "Colour",
 		visible: !0,
 		invert: !1,
 		opacity: 100,
@@ -328,13 +328,21 @@ function se(e, t, n, r, i) {
 		y: e.y + s * e.h
 	};
 }
-var L = (e, t, n) => n / t.height * e.h, R = 13, z = .06, ce = Math.PI / 12, B = {
+function ce(e, t, n, r, i) {
+	let a = e(t, n), o = e(t + r / i, n), s = e(t, n + r), c = o.x - a.x, l = s.x - a.x, u = o.y - a.y, d = s.y - a.y, f = (c + d) / 2, p = (c - d) / 2, m = (u + l) / 2, h = (u - l) / 2, g = Math.hypot(f, h), _ = Math.hypot(p, m), v = (Math.atan2(m, p) + Math.atan2(h, f)) / 2 * (180 / Math.PI);
+	return {
+		rx: g + _,
+		ry: Math.abs(g - _),
+		angle: v
+	};
+}
+var L = .01, R = 13, z = .06, le = Math.PI / 12, B = {
 	add: "#4aa3ff",
 	addDim: "rgba(255,255,255,0.5)",
 	sub: "#ff7a4a",
 	subDim: "rgba(255,150,90,0.5)"
 };
-function le(e, t, n, r) {
+function V(e, t, n, r) {
 	let i = (r, i) => se(e, t, n, r, i), a = (e, t, n, i) => ({
 		x: n + e / r,
 		y: i + t
@@ -358,7 +366,7 @@ function le(e, t, n, r) {
 		}
 	};
 }
-function V() {
+function ue() {
 	let e = { at: null }, t = /* @__PURE__ */ new Set();
 	return {
 		get: () => e,
@@ -371,7 +379,7 @@ function V() {
 		}
 	};
 }
-function H(e, t, n) {
+function de(e, t, n) {
 	let r = (t.x - e.x) * n, i = t.y - e.y, a = Math.hypot(r, i);
 	if (a < 1e-6) return t;
 	let o = Math.round(Math.atan2(i, r) / (Math.PI / 4)) * (Math.PI / 4);
@@ -380,8 +388,8 @@ function H(e, t, n) {
 		y: e.y + Math.sin(o) * a
 	};
 }
-function ue({ rect: n }) {
-	let r = t.stores.useDevelopStore, o = r((e) => e.params.masks), c = r((e) => e.params.straighten), l = r((e) => e.params.transform), u = r((e) => e.params.crop), { region: f, imageAspect: p, rect: m } = t.develop.useDevelopOverlay(), { activeTool: h, maskToolType: g, selectedMaskId: y, selectedComponentId: b } = ee(), [x] = e.useState(V), [w, T] = e.useState(null), E = e.useRef(null), D = e.useRef(null), k = e.useMemo(() => n, [
+function H({ rect: n }) {
+	let r = t.stores.useDevelopStore, o = r((e) => e.params.masks), c = r((e) => e.params.straighten), l = r((e) => e.params.transform), u = r((e) => e.params.crop), { region: f, imageAspect: p, rect: m } = t.develop.useDevelopOverlay(), { activeTool: h, maskToolType: g, selectedMaskId: y, selectedComponentId: b } = ee(), [x] = e.useState(ue), [w, T] = e.useState(null), E = e.useRef(null), D = e.useRef(null), k = e.useMemo(() => n, [
 		n.x,
 		n.y,
 		n.w,
@@ -394,12 +402,12 @@ function ue({ rect: n }) {
 		c,
 		l,
 		p
-	]), { toScreen: I, radialHandle: ie } = le(k, A, j, p), ae = (e, t) => {
+	]), { toScreen: I, radialHandle: ie } = V(k, A, j, p), ae = (e, t) => {
 		let n = (e - k.x) / k.w, r = (t - k.y) / k.h;
 		return d(ne, A.x + n * A.width, A.y + r * A.height);
-	}, se = (e) => oe(e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY), L = r.getState, z = o.find((e) => e.id === y) ?? null, B = z?.components.find((e) => e.id === b) ?? null;
-	function ue(e, t) {
-		let n = B;
+	}, se = (e) => oe(e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY), z = r.getState, B = o.find((e) => e.id === y) ?? null, H = B?.components.find((e) => e.id === b) ?? null;
+	function U(e, t) {
+		let n = H;
 		if (!n) return null;
 		if (n.kind === "radial" && n.radial) {
 			let r = ie(n.radial, "rotate");
@@ -422,7 +430,7 @@ function ue({ rect: n }) {
 		}
 		return null;
 	}
-	function de(e) {
+	function W(e) {
 		let t = O("mask");
 		return N({
 			id: t,
@@ -435,44 +443,44 @@ function ue({ rect: n }) {
 			components: [e]
 		}), t;
 	}
-	function U(e) {
+	function me(e) {
 		return e.maskAddTarget === "new" ? "new" : e.selectedMaskId && o.some((t) => t.id === e.selectedMaskId) ? e.selectedMaskId : "new";
 	}
-	async function pe(e, n, r, i) {
+	async function he(e, n, r, i) {
 		if (!m) return;
 		let a = (r - m.x) / m.w, o = (i - m.y) / m.h;
 		if (a < 0 || a > 1 || o < 0 || o > 1) return;
-		let c = L().photoId, l = await t.develop.probeMaskColour(a, o), u = L().photoId === c ? M(e, n) : void 0;
+		let c = z().photoId, l = await t.develop.probeMaskColour(a, o), u = z().photoId === c ? M(e, n) : void 0;
 		l && u && (F(e, n, { colorRange: {
 			...u.colorRange ?? s(),
 			r: l[0],
 			g: l[1],
 			b: l[2]
-		} }), L().commitEdit("Colour Range Pick"));
+		} }), z().commitEdit("Colour Range Pick"));
 	}
-	let me = (e) => {
+	let ge = (e) => {
 		if (e.button !== 0) return;
 		let { x: t, y: n } = se(e);
 		e.currentTarget.setPointerCapture(e.pointerId);
 		let r = ae(t, n), i = S();
-		if (i.maskColorPicking && z && B?.kind === "colorRange") {
-			C({ maskColorPicking: !1 }), pe(z.id, B.id, t, n);
+		if (i.maskColorPicking && B && H?.kind === "colorRange") {
+			C({ maskColorPicking: !1 }), he(B.id, H.id, t, n);
 			return;
 		}
 		if (h !== "mask") return;
-		let a = ue(t, n);
-		if (a && z && B) {
+		let a = U(t, n);
+		if (a && B && H) {
 			E.current = {
 				kind: a,
-				maskId: z.id,
-				compId: B.id,
+				maskId: B.id,
+				compId: H.id,
 				downSrc: r
 			};
 			return;
 		}
 		let s = i.maskCompMode;
 		if (g === "brush") {
-			let t = U(i), n, a, c = t === "new" ? null : o.find((e) => e.id === t), l = c?.components.find((e) => e.id === i.selectedComponentId) ?? null, u = l && l.kind === "brush" && l.mode === s ? l : null;
+			let t = me(i), n, a, c = t === "new" ? null : o.find((e) => e.id === t), l = c?.components.find((e) => e.id === i.selectedComponentId) ?? null, u = l && l.kind === "brush" && l.mode === s ? l : null;
 			if (u && c) n = c.id, a = u.id, C({
 				selectedMaskId: n,
 				selectedComponentId: a
@@ -489,7 +497,7 @@ function ue({ rect: n }) {
 						feather: i.brushFeather
 					}
 				};
-				t === "new" ? n = de(e) : (n = t, P(n, e)), C({ maskAddTarget: "current" });
+				t === "new" ? n = W(e) : (n = t, P(n, e)), C({ maskAddTarget: "current" });
 			}
 			let d = {
 				radius: i.brushSize,
@@ -524,7 +532,7 @@ function ue({ rect: n }) {
 			};
 			return;
 		}
-		let c = U(i), l = O("comp"), u = g === "radial" ? {
+		let c = me(i), l = O("comp"), u = g === "radial" ? {
 			id: l,
 			kind: "radial",
 			mode: s,
@@ -549,14 +557,14 @@ function ue({ rect: n }) {
 				y1: r.y
 			}
 		}, d;
-		c === "new" ? d = de(u) : (d = c, P(d, u)), C({ maskAddTarget: "current" }), E.current = {
+		c === "new" ? d = W(u) : (d = c, P(d, u)), C({ maskAddTarget: "current" }), E.current = {
 			kind: g === "radial" ? "create-radial" : "create-linear",
 			maskId: d,
 			compId: l,
 			downSrc: r,
 			fromCenter: e.altKey
 		};
-	}, he = (e) => {
+	}, G = (e) => {
 		let { x: t, y: n } = se(e);
 		x.set({ at: {
 			x: t,
@@ -565,7 +573,7 @@ function ue({ rect: n }) {
 		} });
 		let r = E.current;
 		if (!r) {
-			h === "mask" && T(ue(t, n));
+			h === "mask" && T(U(t, n));
 			return;
 		}
 		let i = ae(t, n), a = e.shiftKey, o = M(r.maskId, r.compId);
@@ -587,7 +595,7 @@ function ue({ rect: n }) {
 				break;
 			}
 			case "create-linear": {
-				let e = a ? H(r.downSrc, i, p) : i;
+				let e = a ? de(r.downSrc, i, p) : i;
 				F(r.maskId, r.compId, { linear: {
 					x0: r.downSrc.x,
 					y0: r.downSrc.y,
@@ -629,7 +637,7 @@ function ue({ rect: n }) {
 			case "radial-rotate": {
 				if (!o?.radial) break;
 				let e = (i.x - o.radial.cx) * p, t = i.y - o.radial.cy, n = Math.atan2(t, e) + Math.PI / 2;
-				a && (n = Math.round(n / ce) * ce), F(r.maskId, r.compId, { radial: {
+				a && (n = Math.round(n / le) * le), F(r.maskId, r.compId, { radial: {
 					...o.radial,
 					angle: n
 				} });
@@ -637,7 +645,7 @@ function ue({ rect: n }) {
 			}
 			case "linear-p0": {
 				if (!o?.linear) break;
-				let e = a ? H({
+				let e = a ? de({
 					x: o.linear.x1,
 					y: o.linear.y1
 				}, i, p) : i;
@@ -650,7 +658,7 @@ function ue({ rect: n }) {
 			}
 			case "linear-p1": {
 				if (!o?.linear) break;
-				let e = a ? H({
+				let e = a ? de({
 					x: o.linear.x0,
 					y: o.linear.y0
 				}, i, p) : i;
@@ -675,15 +683,28 @@ function ue({ rect: n }) {
 				break;
 			}
 		}
-	}, G = () => {
+	}, K = () => {
 		let e = E.current;
 		if (E.current = null, !e) return;
 		let t = M(e.maskId, e.compId);
 		e.kind === "create-radial" && t?.radial && (t.radial.rx < .01 || t.radial.ry < .01) || e.kind === "create-linear" && t?.linear && Math.hypot(t.linear.x1 - t.linear.x0, t.linear.y1 - t.linear.y0) < .01 ? (te(e.maskId, e.compId), C({
 			selectedMaskId: null,
 			selectedComponentId: null
-		})) : L().commitEdit("Mask");
-	}, K = W();
+		})) : z().commitEdit("Mask");
+	}, q = fe(), _e = e.useMemo(() => {
+		let e = ae(k.x + k.w / 2, k.y + k.h / 2), t = ce(I, e.x, e.y, L, p);
+		return {
+			rx: t.rx / L,
+			ry: t.ry / L,
+			angle: t.angle
+		};
+	}, [
+		k,
+		A,
+		j,
+		ne,
+		p
+	]);
 	return /* @__PURE__ */ e.createElement("div", {
 		"data-mask-canvas": "",
 		style: {
@@ -692,9 +713,9 @@ function ue({ rect: n }) {
 			cursor: t.cursors.resolve("crosshair"),
 			touchAction: "none"
 		},
-		onPointerDown: me,
-		onPointerMove: he,
-		onPointerUp: G,
+		onPointerDown: ge,
+		onPointerMove: G,
+		onPointerUp: K,
 		onPointerLeave: () => x.set({ at: null })
 	}, /* @__PURE__ */ e.createElement("svg", { style: {
 		position: "absolute",
@@ -702,7 +723,7 @@ function ue({ rect: n }) {
 		width: "100%",
 		height: "100%",
 		pointerEvents: "none"
-	} }, h === "mask" && /* @__PURE__ */ e.createElement(K, {
+	} }, h === "mask" && /* @__PURE__ */ e.createElement(q, {
 		masks: o,
 		selectedMaskId: y,
 		selectedComponentId: b,
@@ -711,14 +732,14 @@ function ue({ rect: n }) {
 		crop: A,
 		forward: j,
 		imageAspect: p
-	}), /* @__PURE__ */ e.createElement(fe, {
+	}), /* @__PURE__ */ e.createElement(pe, {
 		pointer: x,
 		rect: k,
-		crop: A
+		ringScale: _e
 	})));
 }
-function de({ masks: t, selectedMaskId: n, selectedComponentId: r, hovered: i, rect: a, crop: o, forward: s, imageAspect: c }) {
-	let { toScreen: l, radialHandle: u, rotatedEllipsePath: d } = le(a, o, s, c);
+function U({ masks: t, selectedMaskId: n, selectedComponentId: r, hovered: i, rect: a, crop: o, forward: s, imageAspect: c }) {
+	let { toScreen: l, radialHandle: u, rotatedEllipsePath: d } = V(a, o, s, c);
 	return /* @__PURE__ */ e.createElement(e.Fragment, null, t.flatMap((t) => t.components.map((a) => {
 		let o = a.id === r && t.id === n, s = a.mode === "subtract", c = o ? s ? B.sub : B.add : s ? B.subDim : B.addDim, f = s ? B.sub : B.add, p = t.id + ":" + a.id;
 		if (a.kind === "radial" && a.radial) {
@@ -810,44 +831,42 @@ function de({ masks: t, selectedMaskId: n, selectedComponentId: r, hovered: i, r
 		return null;
 	})));
 }
-var U = null, W = () => U ??= e.memo(de);
-function fe({ pointer: t, rect: n, crop: r }) {
-	let { at: i } = e.useSyncExternalStore(t.subscribe, t.get), { activeTool: a, maskToolType: o, brushErase: s, maskCompMode: c, brushSize: l, brushFeather: u, brushPreview: d } = ee(), f = a === "mask" && o === "brush", p = f ? i : null, m = L(n, r, l), h = i?.alt || s || c === "subtract", g = d && f, _ = n.x + n.w / 2, v = n.y + n.h / 2, y = h ? "#ff6b6b" : "#fff";
-	return /* @__PURE__ */ e.createElement(e.Fragment, null, p && /* @__PURE__ */ e.createElement("g", null, /* @__PURE__ */ e.createElement("circle", {
-		cx: p.x,
-		cy: p.y,
-		r: Math.max(3, m),
+var W = null, fe = () => W ??= e.memo(U);
+function pe({ pointer: t, rect: n, ringScale: r }) {
+	let { at: i } = e.useSyncExternalStore(t.subscribe, t.get), { activeTool: a, maskToolType: o, brushErase: s, maskCompMode: c, brushSize: l, brushFeather: u, brushPreview: d } = ee(), f = a === "mask" && o === "brush", p = f ? i : null, m = (e, t, n, i) => ({
+		cx: e,
+		cy: t,
+		rx: Math.max(i, r.rx * l * n),
+		ry: Math.max(i, r.ry * l * n),
+		transform: `rotate(${r.angle} ${e} ${t})`
+	}), h = i?.alt || s || c === "subtract", g = d && f, _ = n.x + n.w / 2, v = n.y + n.h / 2, y = h ? "#ff6b6b" : "#fff";
+	return /* @__PURE__ */ e.createElement(e.Fragment, null, p && /* @__PURE__ */ e.createElement("g", null, /* @__PURE__ */ e.createElement("ellipse", {
+		...m(p.x, p.y, 1, 3),
 		fill: "none",
 		stroke: y,
 		strokeWidth: 1.2,
 		strokeDasharray: h ? "4 3" : void 0,
 		opacity: .9
-	}), /* @__PURE__ */ e.createElement("circle", {
-		cx: p.x,
-		cy: p.y,
-		r: Math.max(1, m * (1 - u)),
+	}), /* @__PURE__ */ e.createElement("ellipse", {
+		...m(p.x, p.y, 1 - u, 1),
 		fill: "none",
 		stroke: y,
 		strokeWidth: .6,
 		opacity: .4
-	})), g && /* @__PURE__ */ e.createElement("g", { opacity: .8 }, /* @__PURE__ */ e.createElement("circle", {
-		cx: _,
-		cy: v,
-		r: Math.max(3, m),
+	})), g && /* @__PURE__ */ e.createElement("g", { opacity: .8 }, /* @__PURE__ */ e.createElement("ellipse", {
+		...m(_, v, 1, 3),
 		fill: "none",
 		stroke: "#fff",
 		strokeWidth: 1.2
-	}), /* @__PURE__ */ e.createElement("circle", {
-		cx: _,
-		cy: v,
-		r: Math.max(1, m * (1 - u)),
+	}), /* @__PURE__ */ e.createElement("ellipse", {
+		...m(_, v, 1 - u, 1),
 		fill: "none",
 		stroke: "#fff",
 		strokeWidth: .6,
 		opacity: .5
 	})));
 }
-var pe = {
+var me = {
 	"brush.smaller": {
 		key: "brushSize",
 		step: -.01,
@@ -905,10 +924,10 @@ var pe = {
 		digits: 2
 	}
 };
-function me(e, n) {
+function he(e, n) {
 	let r = S();
 	if (e === "mask.delete") return !r.selectedMaskId || !r.selectedComponentId ? !1 : (n && (te(r.selectedMaskId, r.selectedComponentId), t.stores.useDevelopStore.getState().commitEdit("Delete Component")), !0);
-	let i = pe[e];
+	let i = me[e];
 	if (!i || i.key === "brushSize" && (r.activeTool !== "mask" || r.maskToolType !== "brush")) return !1;
 	if (n) {
 		let e = {};
@@ -916,12 +935,12 @@ function me(e, n) {
 	}
 	return !0;
 }
-var he = {
-	overlay: ue,
+var ge = {
+	overlay: H,
 	zoomable: !0,
 	onEscape: E,
-	onAction: (e) => me(e, !0),
-	wants: (e) => me(e, !1)
+	onAction: (e) => he(e, !0),
+	wants: (e) => he(e, !1)
 }, G = "safelight-masks", K = {
 	panel: `${G}-panel`,
 	menuAnchor: `${G}-menu-anchor`,
@@ -977,7 +996,7 @@ var he = {
 	pick: `${G}-pick`,
 	swatch: `${G}-swatch`
 }, q = (e, t) => `color-mix(in srgb, ${e} ${t}%, transparent)`;
-function ge(e) {
+function _e(e) {
 	return `
 :where(.${K.panel} > :not(:last-child)) { margin-block: 0 0.5rem; }
 :where(.${K.menuAnchor}) { position: relative; }
@@ -1063,7 +1082,7 @@ html.sl-larger-text .${K.caption} { text-transform: none !important; letter-spac
 }
 //#endregion
 //#region src/MasksPanel.tsx
-var _e = "Update processing", ve = [
+var ve = "Update processing", ye = [
 	{
 		type: "radial",
 		label: "Radial"
@@ -1076,38 +1095,38 @@ var _e = "Update processing", ve = [
 		type: "brush",
 		label: "Brush"
 	}
-], ye = [{
+], be = [{
 	kind: "lumRange",
 	label: "Luminance Range"
 }, {
 	kind: "colorRange",
-	label: "Color Range"
-}], be = {
+	label: "Colour Range"
+}], xe = {
 	radial: "◯",
 	linear: "▤",
 	brush: "✎",
 	lumRange: "◐",
 	colorRange: "⬤"
-}, xe = {
+}, Se = {
 	radial: "Radial",
 	linear: "Linear",
 	brush: "Brush",
 	lumRange: "Luminance",
-	colorRange: "Color"
-}, Se = {
+	colorRange: "Colour"
+}, Ce = {
 	add: "+",
 	subtract: "−",
 	intersect: "∩"
-}, Ce = {
+}, we = {
 	add: K.add,
 	subtract: K.subtract,
 	intersect: K.intersect
-}, we = {
+}, Te = {
 	add: "Add (union) — click to cycle",
 	subtract: "Subtract (carve) — click to cycle",
 	intersect: "Intersect (confine) — click to cycle"
 }, J = (e) => e ? ` ${K.on}` : "";
-function Te({ def: t, onRemove: n }) {
+function Ee({ def: t, onRemove: n }) {
 	let r = t.component;
 	return /* @__PURE__ */ e.createElement("div", { className: K.card }, /* @__PURE__ */ e.createElement("div", { className: K.cardHead }, /* @__PURE__ */ e.createElement("span", { className: K.caption }, t.title), /* @__PURE__ */ e.createElement("button", {
 		type: "button",
@@ -1116,7 +1135,7 @@ function Te({ def: t, onRemove: n }) {
 		className: K.remove
 	}, "×")), /* @__PURE__ */ e.createElement(r, null));
 }
-function Ee() {
+function De() {
 	let { Panel: n, Slider: r, MaskScope: i } = t.components, o = t.stores.useDevelopStore, s = o((e) => e.params.masks), c = o((e) => e.commitEdit), l = o((e) => e.updateMask), u = o((e) => e.updateMaskAdj), d = o((e) => e.seedMaskPanelValues), f = o((e) => e.clearMaskPanelValues), p = t.develop.useOlderProcessing(), m = t.develop.useMaskPanels(), h = t.develop.useCanvasToolHeld(), g = ee(), { activeTool: _, maskToolType: v, maskCompMode: y, selectedMaskId: b, selectedComponentId: x, maskTab: S } = g, w = _ === "mask";
 	e.useEffect(() => {
 		w && !h && C({ activeTool: "none" });
@@ -1134,21 +1153,21 @@ function Ee() {
 		activeTool: "mask"
 	}), se = (e) => {
 		M(!1), C({ maskTab: "coverage" }), e === "lumRange" || e === "colorRange" ? (C({ selectedMaskId: null }), I(e), c("New Mask")) : oe(e);
-	}, L = (e) => {
+	}, ce = (e) => {
 		A(!1), e === "lumRange" || e === "colorRange" ? (I(e), c("Add Component")) : (C({ selectedComponentId: null }), re(e, "add"));
-	}, R = (e) => p && e.extensionParams, z = D ? m.filter((e) => D.panels.includes(e.id)) : [], ce = D ? D.panels.filter((e) => !m.some((t) => t.id === e)) : [], B = () => {
+	}, L = (e) => p && e.extensionParams, R = D ? m.filter((e) => D.panels.includes(e.id)) : [], z = D ? D.panels.filter((e) => !m.some((t) => t.id === e)) : [], le = () => {
 		if (D) {
 			u(D.id, a());
-			for (let e of z) d(D.id, e.owns);
+			for (let e of R) d(D.id, e.owns);
 			c("Mask Reset");
 		}
-	}, le = (e) => {
+	}, B = (e) => {
 		D && (d(D.id, e.owns), l(D.id, { panels: [...D.panels, e.id] }), c("Add Mask Panel"));
 	}, V = (e) => {
 		if (!D) return;
 		let t = m.find((t) => t.id === e);
 		t && f(D.id, t.owns), l(D.id, { panels: D.panels.filter((t) => t !== e) }), c("Remove Mask Panel");
-	}, H = D ? m.filter((e) => !D.panels.includes(e.id)) : [], ue = (e, t) => {
+	}, ue = D ? m.filter((e) => !D.panels.includes(e.id)) : [], de = (e, t) => {
 		C({
 			selectedMaskId: e.id,
 			selectedComponentId: t.id
@@ -1158,7 +1177,7 @@ function Ee() {
 			maskAddTarget: "current",
 			activeTool: "mask"
 		});
-	}, de = (e) => {
+	}, H = (e) => {
 		let t = [];
 		for (let n of e.components) t.includes(n.kind) || t.push(n.kind);
 		return t;
@@ -1195,7 +1214,7 @@ function Ee() {
 		disabled: T,
 		title: T ? "Mask limit reached (16)" : void 0,
 		className: K.create
-	}, "+ Create Mask ▾"), j && /* @__PURE__ */ e.createElement(De, {
+	}, "+ Create Mask ▾"), j && /* @__PURE__ */ e.createElement(Oe, {
 		onPick: (e) => se(e),
 		onClose: () => M(!1)
 	})), /* @__PURE__ */ e.createElement("div", { className: K.head }, /* @__PURE__ */ e.createElement("span", { className: K.hint }, w ? v === "brush" ? `Paint to ${y === "subtract" ? "subtract" : "add"}` : `Drag to ${y === "subtract" ? "subtract" : "add"} a ${v}` : `${s.length}/16 masks`), w && /* @__PURE__ */ e.createElement("button", {
@@ -1231,7 +1250,7 @@ function Ee() {
 			onMouseLeave: () => C({ hoveredMaskId: t.id }),
 			title: n ? "Hide" : "Show",
 			className: K.eye + (n ? "" : ` ${K.hidden}`)
-		}, n ? "◉" : "○"), /* @__PURE__ */ e.createElement("span", { className: K.kinds }, de(t).map((e) => be[e]).join(" ")), N?.id === t.id ? /* @__PURE__ */ e.createElement("input", {
+		}, n ? "◉" : "○"), /* @__PURE__ */ e.createElement("span", { className: K.kinds }, H(t).map((e) => xe[e]).join(" ")), N?.id === t.id ? /* @__PURE__ */ e.createElement("input", {
 			autoFocus: !0,
 			value: N.value,
 			onClick: (e) => e.stopPropagation(),
@@ -1278,16 +1297,16 @@ function Ee() {
 		className: K.tab + J(S === t)
 	}, t))), S === "coverage" ? /* @__PURE__ */ e.createElement("div", { className: K.section }, /* @__PURE__ */ e.createElement("div", { className: K.list }, D.components.map((t) => /* @__PURE__ */ e.createElement("div", {
 		key: t.id,
-		onClick: () => ue(D, t),
+		onClick: () => de(D, t),
 		className: K.row + J(t.id === x)
 	}, /* @__PURE__ */ e.createElement("button", {
 		type: "button",
 		onClick: (e) => {
 			e.stopPropagation(), ne(D.id, t.id), c("Component Mode");
 		},
-		title: we[t.mode],
-		className: `${K.mode} ${Ce[t.mode]}`
-	}, Se[t.mode]), /* @__PURE__ */ e.createElement("span", { className: K.icon }, be[t.kind]), /* @__PURE__ */ e.createElement("span", { className: K.name }, xe[t.kind]), /* @__PURE__ */ e.createElement("button", {
+		title: Te[t.mode],
+		className: `${K.mode} ${we[t.mode]}`
+	}, Ce[t.mode]), /* @__PURE__ */ e.createElement("span", { className: K.icon }, xe[t.kind]), /* @__PURE__ */ e.createElement("span", { className: K.name }, Se[t.kind]), /* @__PURE__ */ e.createElement("button", {
 		type: "button",
 		onClick: (e) => {
 			e.stopPropagation(), F(D.id, t.id, { invert: !t.invert }), c("Component Invert");
@@ -1308,16 +1327,16 @@ function Ee() {
 			A((e) => !e), M(!1);
 		},
 		className: K.addComponent
-	}, "+ Add Component ▾"), k && /* @__PURE__ */ e.createElement(De, {
-		onPick: (e) => L(e),
+	}, "+ Add Component ▾"), k && /* @__PURE__ */ e.createElement(Oe, {
+		onPick: (e) => ce(e),
 		onClose: () => A(!1)
-	})), O && /* @__PURE__ */ e.createElement(Oe, {
+	})), O && /* @__PURE__ */ e.createElement(ke, {
 		key: O.id,
 		maskId: D.id,
 		comp: O
 	})) : /* @__PURE__ */ e.createElement("div", { className: K.section }, /* @__PURE__ */ e.createElement("div", { className: K.head }, /* @__PURE__ */ e.createElement("span", { className: K.caption }, "Amount"), /* @__PURE__ */ e.createElement("button", {
 		type: "button",
-		onClick: B,
+		onClick: le,
 		title: "Reset this mask's adjustments",
 		className: K.reset
 	}, "Reset")), /* @__PURE__ */ e.createElement(r, {
@@ -1332,19 +1351,19 @@ function Ee() {
 	}), /* @__PURE__ */ e.createElement(i, {
 		key: D.id,
 		maskId: D.id
-	}, z.filter((e) => !R(e)).map((t) => /* @__PURE__ */ e.createElement(Te, {
+	}, R.filter((e) => !L(e)).map((t) => /* @__PURE__ */ e.createElement(Ee, {
 		key: t.id,
 		def: t,
 		onRemove: () => V(t.id)
-	}))), z.filter(R).map((t) => /* @__PURE__ */ e.createElement("div", {
+	}))), R.filter(L).map((t) => /* @__PURE__ */ e.createElement("div", {
 		key: t.id,
 		className: `${K.card} ${K.note}`
-	}, /* @__PURE__ */ e.createElement("span", { className: K.noteText }, t.title, " ", /* @__PURE__ */ e.createElement("span", { className: K.dim }, "(needs ", _e, ")")), /* @__PURE__ */ e.createElement("button", {
+	}, /* @__PURE__ */ e.createElement("span", { className: K.noteText }, t.title, " ", /* @__PURE__ */ e.createElement("span", { className: K.dim }, "(needs ", ve, ")")), /* @__PURE__ */ e.createElement("button", {
 		type: "button",
 		onClick: () => V(t.id),
 		title: `Remove ${t.title} (resets its values)`,
 		className: K.remove
-	}, "×"))), ce.map((t) => /* @__PURE__ */ e.createElement("div", {
+	}, "×"))), z.map((t) => /* @__PURE__ */ e.createElement("div", {
 		key: t,
 		className: `${K.card} ${K.note}`
 	}, /* @__PURE__ */ e.createElement("span", { className: K.noteText }, t, " ", /* @__PURE__ */ e.createElement("span", { className: K.dim }, "(not installed)")), /* @__PURE__ */ e.createElement("button", {
@@ -1352,30 +1371,30 @@ function Ee() {
 		onClick: () => V(t),
 		title: `Remove ${t}`,
 		className: K.remove
-	}, "×"))), H.length > 0 && /* @__PURE__ */ e.createElement("div", { className: K.panels }, /* @__PURE__ */ e.createElement("span", { className: K.hint }, "Adjust:"), H.map((t) => /* @__PURE__ */ e.createElement("button", {
+	}, "×"))), ue.length > 0 && /* @__PURE__ */ e.createElement("div", { className: K.panels }, /* @__PURE__ */ e.createElement("span", { className: K.hint }, "Adjust:"), ue.map((t) => /* @__PURE__ */ e.createElement("button", {
 		key: t.id,
 		type: "button",
-		onClick: () => le(t),
-		disabled: R(t),
-		title: R(t) ? `${t.title} in a mask needs the current processing: use ${_e} on this photo first` : void 0,
+		onClick: () => B(t),
+		disabled: L(t),
+		title: L(t) ? `${t.title} in a mask needs the current processing: use ${ve} on this photo first` : void 0,
 		className: K.addPanel
 	}, "+ ", t.title)))))));
 }
-function De({ onPick: t, onClose: n }) {
+function Oe({ onPick: t, onClose: n }) {
 	return /* @__PURE__ */ e.createElement(e.Fragment, null, /* @__PURE__ */ e.createElement("div", {
 		className: K.catcher,
 		onClick: n
-	}), /* @__PURE__ */ e.createElement("div", { className: K.menu }, ve.map((n) => /* @__PURE__ */ e.createElement("button", {
+	}), /* @__PURE__ */ e.createElement("div", { className: K.menu }, ye.map((n) => /* @__PURE__ */ e.createElement("button", {
 		key: n.type,
 		type: "button",
 		onClick: () => t(n.type),
 		className: K.item
-	}, /* @__PURE__ */ e.createElement("span", { className: K.itemIcon }, be[n.type]), n.label)), /* @__PURE__ */ e.createElement("div", { className: K.divider }), ye.map((n) => /* @__PURE__ */ e.createElement("button", {
+	}, /* @__PURE__ */ e.createElement("span", { className: K.itemIcon }, xe[n.type]), n.label)), /* @__PURE__ */ e.createElement("div", { className: K.divider }), be.map((n) => /* @__PURE__ */ e.createElement("button", {
 		key: n.kind,
 		type: "button",
 		onClick: () => t(n.kind),
 		className: K.item
-	}, /* @__PURE__ */ e.createElement("span", { className: K.itemIcon }, be[n.kind]), n.label))));
+	}, /* @__PURE__ */ e.createElement("span", { className: K.itemIcon }, xe[n.kind]), n.label))));
 }
 var Y = (e) => Math.round(e * 100);
 function X({ label: t, title: n, value: r, onChange: i, onCommit: a }) {
@@ -1393,7 +1412,7 @@ function X({ label: t, title: n, value: r, onChange: i, onCommit: a }) {
 		className: K.fieldInput
 	}));
 }
-function Oe({ maskId: n, comp: r }) {
+function ke({ maskId: n, comp: r }) {
 	let { Slider: i } = t.components, a = t.stores.useDevelopStore((e) => e.commitEdit), { maskColorPicking: o } = ee(), s = t.accessibility.useKeyboardCanvasEditing(), c = () => void a("Mask Geometry");
 	if (r.kind === "radial" && r.radial) {
 		let t = r.radial, o = (e) => F(n, r.id, { radial: {
@@ -1520,8 +1539,8 @@ function Oe({ maskId: n, comp: r }) {
 		let t = r.colorRange, s = (e) => F(n, r.id, { colorRange: {
 			...t,
 			...e
-		} }), c = () => void a("Color Range"), l = (e) => Math.round((e <= .0031308 ? e * 12.92 : 1.055 * e ** (1 / 2.4) - .055) * 255), u = `rgb(${l(t.r)}, ${l(t.g)}, ${l(t.b)})`;
-		return /* @__PURE__ */ e.createElement("div", { className: K.ranges }, /* @__PURE__ */ e.createElement("div", { className: K.head }, /* @__PURE__ */ e.createElement("span", { className: K.caption }, "Color range"), /* @__PURE__ */ e.createElement("button", {
+		} }), c = () => void a("Colour Range"), l = (e) => Math.round((e <= .0031308 ? e * 12.92 : 1.055 * e ** (1 / 2.4) - .055) * 255), u = `rgb(${l(t.r)}, ${l(t.g)}, ${l(t.b)})`;
+		return /* @__PURE__ */ e.createElement("div", { className: K.ranges }, /* @__PURE__ */ e.createElement("div", { className: K.head }, /* @__PURE__ */ e.createElement("span", { className: K.caption }, "Colour range"), /* @__PURE__ */ e.createElement("button", {
 			type: "button",
 			onClick: () => C({
 				activeTool: "mask",
@@ -1565,10 +1584,10 @@ function Oe({ maskId: n, comp: r }) {
 }
 //#endregion
 //#region src/curve.ts
-function ke(e) {
+function Ae(e) {
 	let t = [...e].sort((e, t) => e.x - t.x), n = t.length;
 	if (n === 0) return (e) => e;
-	if (n === 1) return () => Me(t[0].y);
+	if (n === 1) return () => Ne(t[0].y);
 	let r = t.map((e) => e.x), i = t.map((e) => e.y), a = [];
 	for (let e = 0; e < n - 1; e++) {
 		let t = r[e + 1] - r[e];
@@ -1589,23 +1608,23 @@ function ke(e) {
 		}
 	}
 	return (e) => {
-		if (e <= r[0]) return Me(i[0]);
-		if (e >= r[n - 1]) return Me(i[n - 1]);
+		if (e <= r[0]) return Ne(i[0]);
+		if (e >= r[n - 1]) return Ne(i[n - 1]);
 		let t = 0;
 		for (; t < n - 1 && e > r[t + 1];) t++;
 		let a = r[t + 1] - r[t], s = (e - r[t]) / a, c = s * s, l = c * s, u = 2 * l - 3 * c + 1, d = l - 2 * c + s, f = -2 * l + 3 * c, p = l - c;
-		return Me(u * i[t] + d * a * o[t] + f * i[t + 1] + p * a * o[t + 1]);
+		return Ne(u * i[t] + d * a * o[t] + f * i[t + 1] + p * a * o[t + 1]);
 	};
 }
-function Ae(e, t, n = 0) {
-	let r = ke(e.rgb), i = ke(e.red), a = ke(e.green), o = ke(e.blue);
+function je(e, t, n = 0) {
+	let r = Ae(e.rgb), i = Ae(e.red), a = Ae(e.green), o = Ae(e.blue);
 	for (let e = 0; e < 256; e++) {
 		let s = r(e / 255), c = n + e * 4;
 		t[c] = Math.round(i(s) * 255), t[c + 1] = Math.round(a(s) * 255), t[c + 2] = Math.round(o(s) * 255), t[c + 3] = 255;
 	}
 	return t;
 }
-function je(e) {
+function Me(e) {
 	return [
 		"rgb",
 		"red",
@@ -1616,12 +1635,12 @@ function je(e) {
 		return n.length === 2 && n[0].x === 0 && n[0].y === 0 && n[1].x === 1 && n[1].y === 1;
 	});
 }
-function Me(e) {
+function Ne(e) {
 	return e < 0 ? 0 : e > 1 ? 1 : e;
 }
 //#endregion
 //#region src/stages.ts
-var Ne = "safelight.masks.coverage", Pe = "// Coverage of one component (0..1), before add/subtract combine. px is the\n// current pixel's working (scene-linear) colour and pxL its luma — used by the\n// parametric range masks (luminance / colour).\nfloat compCoverage(int i, vec2 uv, vec3 px, float pxL) {\n  int type = uCompType[i];\n  vec4 gA = uCompGeoA[i];\n  vec4 gB = uCompGeoB[i];\n  float m = 0.0;\n  if (type == 0) {\n    // Linear gradient: ramp 0->1 projected onto the drag direction.\n    vec2 p0 = gA.xy;\n    vec2 p1 = gA.zw;\n    vec2 dir = p1 - p0;\n    float len2 = max(dot(dir, dir), 1e-6);\n    m = clamp(dot(uv - p0, dir) / len2, 0.0, 1.0);\n  } else if (type == 1) {\n    // Radial: 1 inside, feathered to 0 at the edge, in screen-proportional space.\n    vec2 ctr = gA.xy;\n    vec2 rad = max(gA.zw, vec2(1e-4));\n    float feather = gB.x;\n    float ang = gB.y;\n    vec2 q = vec2((uv.x - ctr.x) * uImageAspect, uv.y - ctr.y);\n    float ca = cos(ang);\n    float sa = sin(ang);\n    vec2 qr = vec2(ca * q.x + sa * q.y, -sa * q.x + ca * q.y);\n    vec2 radS = vec2(rad.x * uImageAspect, rad.y);\n    float d = length(qr / radS);\n    m = 1.0 - smoothstep(1.0 - feather, 1.0, d);\n  } else if (type == 3) {\n    // Luminance range: 1 inside [lo,hi], soft ramps of width loF/hiF at the ends.\n    float lo = gA.x;\n    float hi = gA.y;\n    float loF = max(gA.z, 1e-4);\n    float hiF = max(gA.w, 1e-4);\n    float lower = smoothstep(lo - loF, lo, pxL);\n    float upper = 1.0 - smoothstep(hi, hi + hiF, pxL);\n    m = lower * upper;\n  } else if (type == 4) {\n    // Colour range: closeness to a target colour, measured in hue + chroma.\n    vec3 tgt = gA.xyz;\n    float hueRange = max(gA.w, 1e-3);\n    float satRange = max(gB.x, 1e-3);\n    float smth = gB.y;\n    // Compare in a tone-normalized chroma space so exposure differences along\n    // the same hue don't break the match. Direction of the colour vector ~ hue,\n    // its length relative to luma ~ saturation.\n    float tL = max(luma(tgt), 1e-4);\n    vec3 pd = px - vec3(pxL);\n    vec3 td = tgt - vec3(tL);\n    float pLen = length(pd);\n    float tLen = length(td);\n    float hueDist = 1.0 - (dot(pd, td) / max(pLen * tLen, 1e-4)); // 0 = same hue\n    float satDist = abs(pLen / max(pxL, 1e-3) - tLen / tL);       // chroma mismatch\n    float hueM = 1.0 - smoothstep(hueRange, hueRange + smth + 1e-3, hueDist);\n    float satM = 1.0 - smoothstep(satRange, satRange + smth + 1e-3, satDist);\n    // Near-neutral target/pixel have no meaningful hue — fall back to chroma only.\n    float chromaW = smoothstep(0.01, 0.05, tLen);\n    m = mix(satM, hueM * satM, chromaW);\n  } else {\n    // Brush: prebaked coverage from the atlas channel. ch < 0 marks a brush with\n    // no atlas slot (beyond the 4 the RGBA atlas holds) — it contributes nothing\n    // rather than borrowing channel 0's coverage.\n    vec4 cov = texture(uMaskTex, uv);\n    int ch = uCompBrushCh[i];\n    m = ch < 0 ? 0.0 : (ch == 0 ? cov.r : (ch == 1 ? cov.g : (ch == 2 ? cov.b : cov.a)));\n  }\n  if (uCompInvert[i] == 1) m = 1.0 - m;\n  return clamp(m, 0.0, 1.0);\n}", Z = (e, t, n) => ({
+var Pe = "safelight.masks.coverage", Fe = "// Coverage of one component (0..1), before add/subtract combine. px is the\n// current pixel's working (scene-linear) colour and pxL its luma — used by the\n// parametric range masks (luminance / colour).\nfloat compCoverage(int i, vec2 uv, vec3 px, float pxL) {\n  int type = uCompType[i];\n  vec4 gA = uCompGeoA[i];\n  vec4 gB = uCompGeoB[i];\n  float m = 0.0;\n  if (type == 0) {\n    // Linear gradient: ramp 0->1 projected onto the drag direction.\n    vec2 p0 = gA.xy;\n    vec2 p1 = gA.zw;\n    vec2 dir = p1 - p0;\n    float len2 = max(dot(dir, dir), 1e-6);\n    m = clamp(dot(uv - p0, dir) / len2, 0.0, 1.0);\n  } else if (type == 1) {\n    // Radial: 1 inside, feathered to 0 at the edge, in screen-proportional space.\n    vec2 ctr = gA.xy;\n    vec2 rad = max(gA.zw, vec2(1e-4));\n    float feather = gB.x;\n    float ang = gB.y;\n    vec2 q = vec2((uv.x - ctr.x) * uImageAspect, uv.y - ctr.y);\n    float ca = cos(ang);\n    float sa = sin(ang);\n    vec2 qr = vec2(ca * q.x + sa * q.y, -sa * q.x + ca * q.y);\n    vec2 radS = vec2(rad.x * uImageAspect, rad.y);\n    float d = length(qr / radS);\n    m = 1.0 - smoothstep(1.0 - feather, 1.0, d);\n  } else if (type == 3) {\n    // Luminance range: 1 inside [lo,hi], soft ramps of width loF/hiF at the ends.\n    float lo = gA.x;\n    float hi = gA.y;\n    float loF = max(gA.z, 1e-4);\n    float hiF = max(gA.w, 1e-4);\n    float lower = smoothstep(lo - loF, lo, pxL);\n    float upper = 1.0 - smoothstep(hi, hi + hiF, pxL);\n    m = lower * upper;\n  } else if (type == 4) {\n    // Colour range: closeness to a target colour, measured in hue + chroma.\n    vec3 tgt = gA.xyz;\n    float hueRange = max(gA.w, 1e-3);\n    float satRange = max(gB.x, 1e-3);\n    float smth = gB.y;\n    // Compare in a tone-normalized chroma space so exposure differences along\n    // the same hue don't break the match. Direction of the colour vector ~ hue,\n    // its length relative to luma ~ saturation.\n    float tL = max(luma(tgt), 1e-4);\n    vec3 pd = px - vec3(pxL);\n    vec3 td = tgt - vec3(tL);\n    float pLen = length(pd);\n    float tLen = length(td);\n    float hueDist = 1.0 - (dot(pd, td) / max(pLen * tLen, 1e-4)); // 0 = same hue\n    float satDist = abs(pLen / max(pxL, 1e-3) - tLen / tL);       // chroma mismatch\n    float hueM = 1.0 - smoothstep(hueRange, hueRange + smth + 1e-3, hueDist);\n    float satM = 1.0 - smoothstep(satRange, satRange + smth + 1e-3, satDist);\n    // Near-neutral target/pixel have no meaningful hue — fall back to chroma only.\n    float chromaW = smoothstep(0.01, 0.05, tLen);\n    m = mix(satM, hueM * satM, chromaW);\n  } else {\n    // Brush: prebaked coverage from the atlas channel. ch < 0 marks a brush with\n    // no atlas slot (beyond the 4 the RGBA atlas holds) — it contributes nothing\n    // rather than borrowing channel 0's coverage.\n    vec4 cov = texture(uMaskTex, uv);\n    int ch = uCompBrushCh[i];\n    m = ch < 0 ? 0.0 : (ch == 0 ? cov.r : (ch == 1 ? cov.g : (ch == 2 ? cov.b : cov.a)));\n  }\n  if (uCompInvert[i] == 1) m = 1.0 - m;\n  return clamp(m, 0.0, 1.0);\n}", Z = (e, t, n) => ({
 	key: e,
 	glslType: "int",
 	length: n,
@@ -1634,7 +1653,7 @@ var Ne = "safelight.masks.coverage", Pe = "// Coverage of one component (0..1), 
 	size: t,
 	default: Array(n * 4).fill(0)
 }), $ = (e, t) => [...e, ...Array(t - e.length).fill(0)];
-function Fe(e) {
+function Ie(e) {
 	if (e.kind === "linear" && e.linear) return {
 		type: 0,
 		a: [
@@ -1717,13 +1736,13 @@ function Fe(e) {
 		]
 	};
 }
-var Ie = 0, Le = (e) => ({
-	id: Ne,
+var Le = 0, Re = (e) => ({
+	id: Pe,
 	name: "Masking",
 	phase: "scene-linear",
 	anchor: "masks",
 	glsl: "",
-	helpers: Pe,
+	helpers: Fe,
 	uniforms: [
 		{
 			key: "uMaskCount",
@@ -1773,7 +1792,7 @@ var Ie = 0, Le = (e) => ({
 				c: n
 			});
 		});
-		let o = a.map(({ c: e }) => Fe(e)), s = Array(384).fill(0);
+		let o = a.map(({ c: e }) => Ie(e)), s = Array(384).fill(0);
 		n.forEach((e, t) => {
 			e.hsl && !c(e.hsl) && r.forEach((n, r) => {
 				s[t * 24 + r] = e.hsl.hue[n] / 100, s[t * 24 + 8 + r] = e.hsl.saturation[n] / 100, s[t * 24 + 16 + r] = e.hsl.luminance[n] / 100;
@@ -1786,7 +1805,7 @@ var Ie = 0, Le = (e) => ({
 			t,
 			255
 		], (e * 256 + t) * 4);
-		let d = n.map((e, t) => !e.toneCurve || je(e.toneCurve) ? 0 : (Ae(e.toneCurve, u, t * 256 * 4), 1)), f = (e) => $(n.flatMap((t) => e(t.adj)), 64);
+		let d = n.map((e, t) => !e.toneCurve || Me(e.toneCurve) ? 0 : (je(e.toneCurve, u, t * 256 * 4), 1)), f = (e) => $(n.flatMap((t) => e(t.adj)), 64);
 		return {
 			uMaskCount: n.length,
 			uMaskInvert: $(n.map((e) => +!!e.invert), 16),
@@ -1831,7 +1850,7 @@ var Ie = 0, Le = (e) => ({
 				width: 256,
 				height: 16,
 				format: "rgba8",
-				version: ++Ie
+				version: ++Le
 			},
 			...e === 1 ? {} : { uMaskHasDisplay: $(n.map((e) => +!!l(e.adj)), 16) }
 		};
@@ -1839,20 +1858,20 @@ var Ie = 0, Le = (e) => ({
 });
 //#endregion
 //#region src/viz.ts
-function Re(e, t, n, r) {
+function ze(e, t, n, r) {
 	return t && e.some((e) => e.id === t) ? t : n && r === "coverage" && e.some((e) => e.id === n) ? n : null;
 }
 //#endregion
 //#region src/index.tsx
-var ze = "core.masks", Be = "safelight.masks.styles", Ve = 3, He = [];
-function Ue(e) {
+var Be = "core.masks", Ve = "safelight.masks.styles", He = 3, Ue = [];
+function We(e) {
 	n(e), w(), e.registerStylesheet({
+		id: Ve,
+		css: _e(e.ui.tokens)
+	}), e.registerProcessingStage(Re(3)), e.registerPanel({
 		id: Be,
-		css: ge(e.ui.tokens)
-	}), e.registerProcessingStage(Le(3)), e.registerPanel({
-		id: ze,
 		title: "Masking",
-		component: Ee,
+		component: De,
 		defaultDock: {
 			module: "develop",
 			direction: "left",
@@ -1868,15 +1887,15 @@ function Ue(e) {
 			}), e.stores.useDevelopStore.getState().resetParams(["masks"], "Reset Masking");
 		}
 	});
-	for (let e of He) e();
+	for (let e of Ue) e();
 	let t = e.stores.useDevelopStore, r = !1, i = () => {
 		let t = S().activeTool === "mask";
-		t !== r && (r = t, e.develop.setCanvasTool(t ? he : null));
+		t !== r && (r = t, e.develop.setCanvasTool(t ? ge : null));
 	}, a = null, o = () => {
-		let n = S(), r = Re(t.getState().params.masks, n.hoveredMaskId, n.selectedMaskId, n.maskTab);
+		let n = S(), r = ze(t.getState().params.masks, n.hoveredMaskId, n.selectedMaskId, n.maskTab);
 		r !== a && (a = r, e.develop.showMaskCoverage(r));
 	};
-	He = [
+	Ue = [
 		T(i),
 		T(o),
 		t.subscribe(o),
@@ -1891,11 +1910,11 @@ function Ue(e) {
 		})
 	];
 }
-function We() {
-	for (let e of He) e();
-	He = [], w(), t.develop.setCanvasTool(null), t.develop.showMaskCoverage(null);
+function Ge() {
+	for (let e of Ue) e();
+	Ue = [], w(), t.develop.setCanvasTool(null), t.develop.showMaskCoverage(null);
 }
 //#endregion
-export { Ve as LINE, ze as PANEL_ID, Be as STYLESHEET_ID, Ue as activate, We as deactivate };
+export { He as LINE, Be as PANEL_ID, Ve as STYLESHEET_ID, We as activate, Ge as deactivate };
 
 //# sourceMappingURL=index.js.map

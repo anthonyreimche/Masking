@@ -1,7 +1,7 @@
 {
   "name": "safelight-masking",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Masking extension for Safelight: local adjustments with brush, linear, radial and range masks.",
   "type": "module",
   "scripts": {
