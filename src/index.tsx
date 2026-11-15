@@ -48,6 +48,8 @@ export function activate(host: SafelightAPI): void {
     if (next === armed) return;
     armed = next;
     host.develop.setCanvasTool(next ? MASK_TOOL : null);
+    // The stage is dormant until a photo has a mask: build it in now.
+    if (next) host.develop.prewarmStages?.();
   };
   // Core tints the coverage of the mask the panel points at: hovered in the
   // list, or selected while its editor is on Coverage.

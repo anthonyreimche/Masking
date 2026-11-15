@@ -91,6 +91,8 @@ export interface Rig {
   coverage: (string | null)[];
   /** Each point the colour probe was asked for. */
   probes: { u: number; v: number }[];
+  /** How many times the extension hinted its stages are about to be needed. */
+  prewarms(): number;
   /** The canvas tool this extension holds, or null. */
   held(): CanvasTool | null;
   /** Another extension takes the canvas. */
@@ -120,6 +122,7 @@ export function fakeApi({ params = {} as Partial<DevelopParams> } = {}): Rig {
   let nextSlider = 0;
   let probeColour: Rgb | null = [0.42, 0.18, 0.07];
   let holding = false;
+  let prewarms = 0;
   let pending: (() => void)[] = [];
 
   const develop: StoreApi<DevelopStoreState> = create<DevelopStoreState>()((set, get) => {
@@ -222,6 +225,9 @@ export function fakeApi({ params = {} as Partial<DevelopParams> } = {}): Rig {
       showMaskCoverage: (maskId) => void coverage.push(maskId),
       useMaskPanels: () => maskPanels((s) => s.entries),
       useOlderProcessing: () => develop((s) => s.params.processVersion < CURRENT_PROCESS_VERSION),
+      prewarmStages: () => {
+        prewarms++;
+      },
     },
     accessibility: { useKeyboardCanvasEditing: () => keyboard((s) => s.on) },
     cursors: { resolve: (token) => (token === "crosshair" ? "crosshair" : "default") },
@@ -238,6 +244,7 @@ export function fakeApi({ params = {} as Partial<DevelopParams> } = {}): Rig {
     stylesheets,
     coverage,
     probes,
+    prewarms: () => prewarms,
     held: () => {
       const held = canvas.getState().held;
       return held?.owner === "self" ? held.tool : null;

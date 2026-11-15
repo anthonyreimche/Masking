@@ -280,6 +280,11 @@ export interface ProcessingStageContribution {
   textures?: { key: string; kind: "photo" }[];
   /** The uniforms' values for a photo (official extensions only). */
   derive?: StageDerive;
+  /** When the stage changes nothing: uniform key → value. While it holds, the
+   *  live view leaves the stage out of a version 2 or later photo's program,
+   *  and the first photo that needs it brings it in. Needs Safelight 3.2.1;
+   *  older builds ignore it. */
+  dormantWhen?: Readonly<Record<string, number>>;
 }
 
 export interface StylesheetContribution {
@@ -403,6 +408,10 @@ export interface SafelightAPI {
      *  version than the current one, where an extension's values in a mask
      *  don't run. */
     useOlderProcessing(): boolean;
+    /** A hint that this extension's stages are about to be needed: the live
+     *  view starts building, in the background, the program with them in.
+     *  Needs Safelight 3.2.4. */
+    prewarmStages?(): void;
   };
   accessibility: {
     /** React hook: whether keyboard canvas editing is on. */

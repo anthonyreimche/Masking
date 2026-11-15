@@ -159,6 +159,9 @@ export const masksStage = (line: Line): ProcessingStageContribution => ({
     ...(line === 1 ? [] : [ints("uMaskHasDisplay", "MAX_MASKS", MAX_MASKS)]),
   ],
   textures: [{ key: "uMaskCurves", kind: "photo" }],
+  // With no masks, core's stand-ins draw the same frame, and the mask loops
+  // and maths cost the shader compiler more than every other stage together.
+  dormantWhen: { uMaskCount: 0 },
   derive: ({ masks: all }) => {
     const masks = all.slice(0, MAX_MASKS);
     // The brush atlas holds the masks' brush components first, in order, one

@@ -106,6 +106,25 @@ describe("activate", () => {
     expect(rig.held()).toBeNull();
   });
 
+  it("starts building the program with the masks in each time the mask tool is armed", () => {
+    act(() => setMaskTool({ activeTool: "mask" }));
+    expect(rig.prewarms()).toBe(1);
+    act(() => setMaskTool({ maskToolType: "brush" }));
+    act(() => setMaskTool({ activeTool: "none" }));
+    expect(rig.prewarms()).toBe(1);
+    act(() => setMaskTool({ activeTool: "mask" }));
+    expect(rig.prewarms()).toBe(2);
+  });
+
+  it("arms the tool on a Safelight too old to take the hint", () => {
+    deactivate();
+    rig = fakeApi();
+    delete rig.api.develop.prewarmStages;
+    activate(rig.api);
+    act(() => setMaskTool({ activeTool: "mask" }));
+    expect(rig.held()).toBe(MASK_TOOL);
+  });
+
   it("leaves the tool, the selection, the hover and the eyedropper when another photo opens", () => {
     setParams({ masks: [mask()] });
     setMaskTool({ activeTool: "mask", selectedMaskId: "m1", selectedComponentId: "c1", hoveredMaskId: "m1", maskColorPicking: true });
