@@ -7,6 +7,11 @@ range masks.
 - **+ Create Mask** starts a mask. **Radial** and **Linear** are drawn by
   dragging on the photo; **Brush** is painted. **Luminance Range** and
   **Colour Range** are made at once, from the photo's tones or colours.
+- Extensions can add kinds of their own, listed after these, such as
+  **Fuzzy Select**: pick it, then click the photo to place points. A photo
+  holds up to four of them, and they need the second processing or later.
+  An extension's kind that isn't installed shows as "(not installed)" and
+  covers nothing until it is back.
 - Drag a radial from corner to corner, or from its centre with Alt; Shift
   keeps it a circle. Shift snaps a linear gradient to 0, 45 or 90°.
 - A selected radial has handles: the centre moves it, the side handles size

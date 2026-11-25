@@ -14,6 +14,7 @@ import { MasksPanel } from "../src/MasksPanel";
 import { MASK_TOOL, MaskCanvas } from "../src/MaskCanvas";
 import { STAGE_ID, masksStage } from "../src/stages";
 import { maskTool, setMaskTool } from "../src/state";
+import { cls } from "../src/styles";
 import { ScopedMask, fakeApi, type Rig } from "./support/fake-api";
 
 // jsdom has no pointer capture.
@@ -23,7 +24,7 @@ HTMLElement.prototype.setPointerCapture ??= () => {};
 const LINE_HASHES: Record<Line, string> = {
   1: "19474e2690a267a8dd81dbc3a248c6831f990c9673629fb9842cb27368d92fbc",
   2: "84c45658aa749f02ef686b98dda4249aed77bce8383c9763d3b712f462d15667",
-  3: "84c45658aa749f02ef686b98dda4249aed77bce8383c9763d3b712f462d15667",
+  3: "0037c554a3121d31019caa616d878ce2b31c7dfba58e220498f125910b5bfe7b",
 };
 
 type StageText = ProcessingStageContribution & { defines?: Record<string, number>; patch?: unknown };
@@ -172,9 +173,49 @@ describe("the stage", () => {
 
 describe("the panel", () => {
   const button = (name: string) => screen.getByRole("button", { name });
-  // A menu item's name runs its icon into its label.
-  const item = (label: string) => screen.getByRole("button", { name: new RegExp(`${label}$`) });
+  const item = (label: string) => screen.getByRole("menuitem", { name: label });
   const draw = () => render(<MasksPanel />);
+  const placeAt = (el: HTMLElement, left: number, bottom: number) => {
+    el.getBoundingClientRect = () => new DOMRect(left, bottom - 20, 120, 20);
+  };
+
+  it("opens Create Mask as core's menu, just under the button", () => {
+    draw();
+    placeAt(button("+ Create Mask ▾"), 12, 48);
+    fireEvent.click(button("+ Create Mask ▾"));
+    expect(rig.menu()).toMatchObject({ x: 12, y: 48 });
+    expect(screen.getAllByRole("menuitem").map((b) => b.textContent)).toEqual([
+      "Radial",
+      "Linear",
+      "Brush",
+      "Luminance Range",
+      "Colour Range",
+    ]);
+    expect(screen.getAllByRole("separator")).toHaveLength(1);
+  });
+
+  it("shows each kind's icon beside it in the menu", () => {
+    draw();
+    fireEvent.click(button("+ Create Mask ▾"));
+    const items = rig.menu()!.items.filter((i) => i !== "separator");
+    expect(items.map((i) => i.icon)).toEqual(["◯", "▤", "✎", "◐", "⬤"]);
+  });
+
+  it("lets core close the menu: Escape, a scroll or a click away", () => {
+    draw();
+    fireEvent.click(button("+ Create Mask ▾"));
+    const menu = rig.menu();
+    expect(menu).not.toBeNull();
+    act(() => menu?.onClose());
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(masks()).toHaveLength(0);
+    expect(maskTool().activeTool).toBe("none");
+  });
+
+  it("has no click-away layer of its own", () => {
+    expect(Object.keys(cls)).not.toContain("catcher");
+    expect(rig.stylesheets.map((s) => s.css).join("\n")).not.toMatch(/position: fixed; inset: 0/);
+  });
 
   it("arms a geometric tool for a new mask from Create Mask", () => {
     setParams({ masks: [mask()] });
@@ -265,6 +306,17 @@ describe("the panel", () => {
     const { container } = draw();
     fireEvent.click(container.querySelector("section > div") as HTMLElement);
     expect(maskTool()).toMatchObject({ selectedMaskId: null, selectedComponentId: null, hoveredMaskId: null });
+  });
+
+  it("resets its brush sliders to the official brush's defaults", () => {
+    deactivate();
+    rig = fakeApi({ brushDefaults: { size: 0.12, feather: 0.3, opacity: 0.9, flow: 0.7 } });
+    activate(rig.api);
+    setMaskTool({ activeTool: "mask", maskToolType: "brush" });
+    const { container } = draw();
+    const sliders = rig.sliders(container);
+    expect(sliders.map((s) => s.value)).toEqual([12, 30, 90, 70]);
+    expect(sliders.map((s) => s.defaultValue)).toEqual([12, 30, 90, 70]);
   });
 
   it("shows the brush settings while the brush is armed, the slider dragged showing the brush", () => {
@@ -397,6 +449,37 @@ describe("the panel", () => {
       expect(rig.held()).toBe(MASK_TOOL);
       fireEvent.click(screen.getByTitle("Pick a target colour from the image"));
       expect(maskTool().maskColorPicking).toBe(false);
+    });
+  });
+
+  describe("its controls are core's kit", () => {
+    const look = (el: HTMLElement) => [el.dataset.kit, el.dataset.variant, el.dataset.size, el.dataset.active, el.dataset.full];
+
+    it("draws Create Mask, Done, the tabs, Add Component and the colour Pick with the kit", () => {
+      setParams({ masks: [mask({ components: [comp({ kind: "colorRange", radial: undefined, colorRange: defaultColorRange() })] })] });
+      setMaskTool({ selectedMaskId: "m1", selectedComponentId: "c1", maskTab: "coverage", activeTool: "mask", maskColorPicking: true });
+      draw();
+      expect(look(button("+ Create Mask ▾"))).toEqual(["button", "secondary", "md", "false", "true"]);
+      expect(look(button("Done"))).toEqual(["button", "secondary", "sm", "false", "false"]);
+      expect(look(button("+ Add Component ▾"))).toEqual(["button", "secondary", "sm", "false", "true"]);
+      expect(look(screen.getByTitle("Pick a target colour from the image"))).toEqual(["button", "secondary", "sm", "true", "false"]);
+      const tabs = screen.getByRole("group");
+      expect([tabs.dataset.kit, tabs.dataset.size]).toEqual(["segmented", "sm"]);
+      expect([...tabs.querySelectorAll("button")].map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual([
+        ["Coverage", "true"],
+        ["Adjust", "false"],
+      ]);
+      fireEvent.click(button("Adjust"));
+      expect(maskTool().maskTab).toBe("adjust");
+    });
+
+    it("draws Reset and the sub-panels to add with the kit", () => {
+      rig.setMaskPanels([{ id: "core.curve", title: "Tone Curve", owns: ["toneCurve"], component: () => null, extensionParams: false }]);
+      setParams({ masks: [mask({ panels: [] })] });
+      setMaskTool({ selectedMaskId: "m1", maskTab: "adjust" });
+      draw();
+      expect(look(button("Reset"))).toEqual(["button", "ghost", "sm", "false", "false"]);
+      expect(look(button("+ Tone Curve"))).toEqual(["button", "secondary", "sm", "false", "false"]);
     });
   });
 
@@ -652,7 +735,7 @@ describe("the canvas tool", () => {
   });
 
   describe("shortcuts", () => {
-    it("sizes only the armed brush with Develop's brush size keys", () => {
+    it("sizes only the armed brush with the official brush's size keys", () => {
       setMaskTool({ maskToolType: "radial" });
       expect(MASK_TOOL.wants?.("brush.larger")).toBe(false);
       expect(MASK_TOOL.onAction?.("brush.larger")).toBe(false);
@@ -661,25 +744,22 @@ describe("the canvas tool", () => {
       expect(maskTool().brushSize).toBe(0.08);
       expect(MASK_TOOL.onAction?.("brush.larger")).toBe(true);
       expect(maskTool().brushSize).toBe(0.09);
-      setMaskTool({ brushSize: 0.5 });
-      MASK_TOOL.onAction?.("brush.larger");
-      expect(maskTool().brushSize).toBe(0.5);
-      setMaskTool({ brushSize: 0.015 });
-      MASK_TOOL.onAction?.("brush.smaller");
-      expect(maskTool().brushSize).toBe(0.01);
+      expect(rig.brushSteps.at(-1)).toEqual({ action: "brush.larger", brush: { size: 0.08, feather: 0.5, opacity: 1, flow: 1 } });
     });
 
-    it("steps feather, opacity and flow within their ranges", () => {
-      setMaskTool({ maskToolType: "brush", brushFeather: 0.5, brushOpacity: 0.95, brushFlow: 0.05 });
+    it("steps feather, opacity and flow as the official brush answers", () => {
+      setMaskTool({ maskToolType: "brush", brushFeather: 0.5, brushOpacity: 0.6, brushFlow: 0.3 });
       expect(MASK_TOOL.onAction?.("brush.featherUp")).toBe(true);
-      expect(MASK_TOOL.onAction?.("brush.opacityUp")).toBe(true);
-      expect(MASK_TOOL.onAction?.("brush.flowDown")).toBe(true);
-      expect(maskTool()).toMatchObject({ brushFeather: 0.55, brushOpacity: 1, brushFlow: 0.01 });
-      setMaskTool({ brushFeather: 0.02 });
-      MASK_TOOL.onAction?.("brush.featherDown");
-      MASK_TOOL.onAction?.("brush.opacityDown");
-      MASK_TOOL.onAction?.("brush.flowUp");
-      expect(maskTool()).toMatchObject({ brushFeather: 0, brushOpacity: 0.9, brushFlow: 0.11 });
+      expect(MASK_TOOL.onAction?.("brush.opacityDown")).toBe(true);
+      expect(MASK_TOOL.onAction?.("brush.flowUp")).toBe(true);
+      expect(maskTool()).toMatchObject({ brushFeather: 0.55, brushOpacity: 0.5, brushFlow: 0.4 });
+      expect(rig.brushSteps.map((s) => s.action)).toEqual(["brush.featherUp", "brush.opacityDown", "brush.flowUp"]);
+    });
+
+    it("leaves an action the official brush doesn't step to core", () => {
+      setMaskTool({ maskToolType: "brush" });
+      expect(MASK_TOOL.wants?.("develop.zoomIn")).toBe(false);
+      expect(MASK_TOOL.onAction?.("develop.zoomIn")).toBe(false);
     });
 
     it("deletes the selected component with Delete, the mask with its last, as one step", () => {

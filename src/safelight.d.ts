@@ -5,14 +5,14 @@
 
 // The slice of Safelight's extension API this extension touches, mirrored from
 // the app's src/extensions/types.ts, src/extensions/develop-host.tsx,
-// src/catalog/types.ts, src/state/{develop-store,settings-store}.ts,
+// src/catalog/types.ts, src/state/develop-store.ts,
 // src/state/develop-slices/mask-slice.ts, src/modules/develop/{canvas-tool,
-// mask-panels,mask-scope}.ts(x), src/state/accessibility.ts and
-// src/ui/components/{Panel,Slider}.tsx.
+// mask-panels,mask-scope,brush,BrushCursor}.ts(x), src/state/accessibility.ts
+// and src/ui/components/{Panel,Slider,ContextMenu}.tsx.
 // Extensions are standalone bundles, so the host's source is not on the type
 // path; React types come from @types/react (dev only).
 
-import type { ComponentType, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ComponentType, ReactNode } from "react";
 
 /** A release line: the process version its stage text was written for, and
  *  the extension's major version. */
@@ -91,7 +91,7 @@ export interface MaskAdjustments {
 
 /** The geometric tools drawn on the canvas. */
 export type MaskType = "linear" | "radial" | "brush";
-export type MaskComponentKind = MaskType | "lumRange" | "colorRange";
+export type MaskComponentKind = MaskType | "lumRange" | "colorRange" | "extension";
 export type MaskComponentMode = "add" | "subtract" | "intersect";
 
 /** One freehand brush dab, in source UV; radius in image-height units. */
@@ -154,6 +154,13 @@ export interface ColorRangeGeo {
   smoothness: number;
 }
 
+/** What an extension's own component kind keeps: its qualified type
+ *  ("{extensionId}.{name}") and the plain-JSON values it chose. */
+export interface MaskComponentExtension {
+  type: string;
+  values: Record<string, unknown>;
+}
+
 export interface MaskComponent {
   id: string;
   kind: MaskComponentKind;
@@ -165,6 +172,7 @@ export interface MaskComponent {
   brush?: BrushMaskGeo;
   lumRange?: LumRangeGeo;
   colorRange?: ColorRangeGeo;
+  extension?: MaskComponentExtension;
 }
 
 export interface Mask {
@@ -215,11 +223,6 @@ export interface DevelopStoreState {
    *  reset), or clear them (taken off). */
   seedMaskPanelValues(maskId: string, owns: readonly string[]): void;
   clearMaskPanelValues(maskId: string, owns: readonly string[]): void;
-}
-
-export interface SettingsState {
-  /** Preferences ▸ Interface scale: the CSS zoom on the app's body. */
-  uiScale: number;
 }
 
 export interface PanelDockDefault {
@@ -276,8 +279,9 @@ export interface ProcessingStageContribution {
   /** Functions main() calls, declared ahead of it. */
   helpers?: string;
   uniforms: UniformDeclaration[];
-  /** "photo": a table derive fills per photo. */
-  textures?: { key: string; kind: "photo" }[];
+  /** "photo": a table derive fills per photo. "dynamic": data core supplies
+   *  (line 3's uMaskRasters, the extension components' coverage). */
+  textures?: { key: string; kind: "photo" | "dynamic" }[];
   /** The uniforms' values for a photo (official extensions only). */
   derive?: StageDerive;
   /** When the stage changes nothing: uniform key → value. While it holds, the
@@ -358,6 +362,94 @@ export interface CanvasTool {
   wants?(action: string): boolean;
 }
 
+export interface BrushSettings {
+    size: number;
+    feather: number;
+    opacity: number;
+    flow: number;
+}
+
+export type BrushSetting = keyof BrushSettings;
+
+/** The setting a brush shortcut changes and its value after the step, held to
+ *  its range; null for an action that isn't a brush shortcut, or one for a
+ *  setting `brush` doesn't have, so a tool without flow leaves the flow keys
+ *  alone. A canvas tool answers onAction and wants with it. */
+declare function stepBrush(action: string, brush: Partial<BrushSettings>): {
+    key: BrushSetting;
+    value: number;
+} | null;
+
+export interface BrushCursorProps {
+    /** The pointer in the overlay's layout px (api.develop.framePoint), or
+     *  "centre" for the reference ring a size slider shows; null draws nothing. */
+    at: {
+        x: number;
+        y: number;
+    } | "centre" | null;
+    /** The brush's radius, a share of the photo's height. */
+    size: number;
+    /** 0 to 1: how much of the radius fades. */
+    feather: number;
+    /** An erasing (subtracting) brush, drawn red and dashed. */
+    erase?: boolean;
+}
+
+declare function BrushCursor({ at, size, feather, erase }: BrushCursorProps): import("react").JSX.Element | null;
+
+export interface ContextMenuItem {
+    label: string;
+    /** A small glyph before the label (about 14 px); decorative, so the label
+     *  alone names the item. Needs Safelight 3.2.7. */
+    icon?: ReactNode;
+    onClick: () => void;
+    /** Render in the red danger colour (e.g. Remove). */
+    danger?: boolean;
+    disabled?: boolean;
+    /** A tooltip on the item, the reason it is disabled, say. */
+    title?: string;
+}
+
+/** A horizontal divider between groups of items. */
+export type ContextMenuEntry = ContextMenuItem | "separator";
+
+export interface ContextMenuProps {
+    x: number;
+    y: number;
+    items: ContextMenuEntry[];
+    onClose: () => void;
+}
+
+/** A click on the photo, in source UV, with the modifiers held. */
+export interface MaskComponentPoint {
+  u: number;
+  v: number;
+  alt: boolean;
+  shift: boolean;
+}
+
+export interface MaskComponentControlsProps {
+  values: Record<string, unknown>;
+  setValues(patch: Record<string, unknown>): void;
+  commit(label: string): void;
+}
+
+/** A kind of mask component an extension offers (Safelight 3.2.8). */
+export interface RegisteredMaskComponentKind {
+  /** "{extensionId}.{name}". */
+  type: string;
+  owner: string;
+  name: string;
+  label: string;
+  icon?: string;
+  commitLabel?: string;
+  generation: number;
+  create(): Record<string, unknown>;
+  onPoint?(values: Record<string, unknown>, p: MaskComponentPoint): Record<string, unknown> | null;
+  markers?(values: Record<string, unknown>): { u: number; v: number; subtract?: boolean }[];
+  Controls?: ComponentType<MaskComponentControlsProps>;
+}
+
 /** A panel that can be added to a mask. */
 export interface MaskPanelEntry {
   /** The panel's id: what a mask's `panels` list holds. */
@@ -385,10 +477,13 @@ export interface SafelightAPI {
     Slider: ComponentType<SliderProps>;
     /** Binds its children (a mask sub-panel's component) to mask `maskId`. */
     MaskScope: ComponentType<{ maskId: string; children: ReactNode }>;
+    /** The right-click menu core surfaces use, placed at client `x`/`y` and
+     *  kept in the viewport. Closes on an outside click, Escape, scroll, or
+     *  choosing an item. */
+    ContextMenu: (props: ContextMenuProps) => import("react").JSX.Element;
   };
   stores: {
     useDevelopStore: StoreApi<DevelopStoreState>;
-    useSettings: StoreApi<SettingsState>;
   };
   develop: {
     /** React hook: the canvas mapping, for an overlay. */
@@ -408,10 +503,52 @@ export interface SafelightAPI {
      *  version than the current one, where an extension's values in a mask
      *  don't run. */
     useOlderProcessing(): boolean;
+    /** React hook: the mask component kinds extensions have registered, in
+     *  the order they came. Needs Safelight 3.2.8. */
+    useMaskComponentKinds?(): readonly RegisteredMaskComponentKind[];
+    /** The raster channel (0 to 3) each extension component of `masks` is
+     *  packed into, by component id; the fifth and later get -1. Needs
+     *  Safelight 3.2.8. */
+    maskRasterChannels?(masks: readonly Mask[]): Record<string, number>;
     /** A hint that this extension's stages are about to be needed: the live
      *  view starts building, in the background, the program with them in.
      *  Needs Safelight 3.2.4. */
     prewarmStages?(): void;
+    /** The official brush every painting tool shares: Masking's. A tool holds
+     *  its own settings and starts them from `defaults` (size is a radius as a
+     *  share of the photo's height, as a BrushDab's; feather, opacity and flow
+     *  run 0 to 1). `actions` are the rebindable brush shortcuts' keybinding
+     *  ids ([ and ] size, Shift+[ and Shift+] feather, comma and period
+     *  opacity, Shift+comma and Shift+period flow), which core hands only to the
+     *  held canvas tool: answer CanvasTool.onAction and wants with `step`,
+     *  passing the settings the tool has. It returns the setting a shortcut
+     *  changes and its new value, held to its range, or null for one the tool
+     *  doesn't have, which core then leaves alone. Needs Safelight 3.2.7. */
+    brush: {
+        defaults: Readonly<BrushSettings>;
+        actions: readonly string[];
+        step: typeof stepBrush;
+    };
+    /** The official brush ring, for a canvas tool's overlay: the brush's edge
+     *  and its feathered core at `at` (overlay layout px, from framePoint; or
+     *  "centre", the reference a size slider shows while dragged), sized as a
+     *  dab paints in the photo through any crop, zoom or Perspective; red and
+     *  dashed for an erasing brush. It draws around the crosshair cursor, as
+     *  Masking's brush does. Needs Safelight 3.2.7. */
+    BrushCursor: typeof BrushCursor;
+    /** The pointer in `el`'s layout px: the space an overlay's `rect`, the
+     *  mapping helpers and CSS left/top use. Interface scale zooms the page,
+     *  so clientX minus the element's left is off by the zoom. Needs Safelight
+     *  3.2.7. */
+    framePoint(el: Element, clientX: number, clientY: number): {
+        x: number;
+        y: number;
+    };
+  };
+  /** Needs Safelight 3.2.8. */
+  extensions?: {
+    /** React hook: true once the installed extensions have finished starting at launch. */
+    useSettled(): boolean;
   };
   accessibility: {
     /** React hook: whether keyboard canvas editing is on. */
@@ -421,7 +558,35 @@ export interface SafelightAPI {
     /** A cursor token's CSS cursor value, as the theme draws it. */
     resolve(token: string): string;
   };
-  ui: { tokens: UiTokens };
+  ui: {
+    tokens: UiTokens;
+    /** Core's button, in the app's look. */
+    Button: ComponentType<ButtonProps>;
+    /** Core's row of mutually exclusive choices. */
+    SegmentedControl: ComponentType<SegmentedControlProps>;
+  };
+}
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "sm" | "md";
+  /** Render as the selected/active state (accent fill), overriding the variant. */
+  active?: boolean;
+  /** Stretch to the container width. */
+  full?: boolean;
+}
+
+export interface SegmentedOption {
+  value: string;
+  label: ReactNode;
+  title?: string;
+}
+
+export interface SegmentedControlProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: SegmentedOption[];
+  size?: "sm" | "md";
 }
 
 export interface ExtensionModule {

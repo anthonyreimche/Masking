@@ -65,15 +65,14 @@ function renderCanvas(rect: OverlayRect = view()) {
     canvas,
     rerender: (next: OverlayRect) => result.rerender(<MaskCanvas rect={next} />),
     circles: () => [...result.container.querySelectorAll("circle")],
-    rings: () => [...result.container.querySelectorAll("ellipse")],
     paths: () => [...result.container.querySelectorAll("path")].map((p) => p.getAttribute("d")),
   };
 }
 
 // jsdom lays nothing out, so the canvas sits at the origin and client
 // coordinates are canvas coordinates.
-const hover = (canvas: Element, x: number, y: number, altKey = false) =>
-  fireEvent.pointerMove(canvas, { pointerId: 1, clientX: x, clientY: y, altKey });
+const hover = (canvas: Element, x: number, y: number) =>
+  fireEvent.pointerMove(canvas, { pointerId: 1, clientX: x, clientY: y });
 
 beforeEach(() => {
   rig = fakeApi();
@@ -86,23 +85,6 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("hover", () => {
-  it("shows the subtract ring under Alt and keeps it on the pointer", () => {
-    setMaskTool({ activeTool: "mask", maskToolType: "brush", brushSize: 0.08 });
-    const { canvas, rings } = renderCanvas();
-
-    hover(canvas, 400, 300);
-    expect(rings()[0].getAttribute("stroke")).toBe("#fff");
-
-    hover(canvas, 420, 310, true);
-    const [outer, inner] = rings();
-    expect(outer.getAttribute("stroke")).toBe("#ff6b6b");
-    expect(outer.getAttribute("stroke-dasharray")).toBe("4 3");
-    expect(inner.getAttribute("stroke")).toBe("#ff6b6b");
-    expect([outer.getAttribute("cx"), outer.getAttribute("cy")]).toEqual(["420", "310"]);
-    expect(Number(outer.getAttribute("rx"))).toBeCloseTo(60);
-    expect(Number(outer.getAttribute("ry"))).toBeCloseTo(60);
-  });
-
   it("moves the brush ring without mapping any outline again", () => {
     seed();
     setMaskTool({ activeTool: "mask", maskToolType: "brush" });
@@ -136,17 +118,6 @@ describe("hover", () => {
     hover(canvas, 742, 404);
 
     expect(eastHandle()?.getAttribute("r")).toBe("6");
-  });
-
-  it("drops the ring when the pointer leaves", () => {
-    setMaskTool({ activeTool: "mask", maskToolType: "brush" });
-    const { canvas, rings } = renderCanvas();
-    hover(canvas, 300, 300);
-    expect(rings()).toHaveLength(2);
-
-    fireEvent.pointerLeave(canvas);
-
-    expect(rings()).toHaveLength(0);
   });
 });
 

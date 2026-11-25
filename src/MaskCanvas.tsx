@@ -12,13 +12,15 @@
 
 import type { ComponentType, PointerEvent as ReactPointerEvent } from "react";
 import { React, api } from "./rt";
-import type { CanvasTool, CropRect, Mask, MaskComponent, OverlayRect, RadialMaskGeo } from "./safelight";
+import type { CanvasTool, CropRect, Mask, MaskComponent, OverlayRect, RadialMaskGeo, RegisteredMaskComponentKind } from "./safelight";
 import { DEFAULT_MASK_PANELS, defaultColorRange, defaultMaskAdjustments } from "./masks";
 import { buildForwardTransform, buildInverseTransform, mat3Apply, type Mat3 } from "./transform";
 import {
   addBrushDab,
   addComponent,
+  addExtensionComponent,
   addMask,
+  BRUSH_KEYS,
   findComponent,
   genId,
   leaveMaskTool,
@@ -26,20 +28,12 @@ import {
   removeComponent,
   setMaskTool,
   updateComponent,
+  useExtensionKinds,
   useMaskTool,
   type MaskTool,
 } from "./state";
 
 type Rect = OverlayRect;
-
-// Pointer position in an element's local LAYOUT pixels, the space `rect` is in:
-// Preferences ▸ Interface scale zooms <body>, and under CSS zoom clientX and
-// getBoundingClientRect() are in zoomed visual pixels, which otherwise drifts
-// brush dabs and the brush ring away from the pointer.
-function frameLocalPoint(rect: { left: number; top: number }, clientX: number, clientY: number) {
-  const z = api.stores.useSettings.getState().uiScale || 1;
-  return { x: (clientX - rect.left) / z, y: (clientY - rect.top) / z };
-}
 
 function projectToScreen(rect: Rect, crop: CropRect, forward: Mat3, sx: number, sy: number) {
   const t = mat3Apply(forward, sx, sy);
@@ -47,32 +41,6 @@ function projectToScreen(rect: Rect, crop: CropRect, forward: Mat3, sx: number, 
   const oy = (t.y - crop.y) / crop.height;
   return { x: rect.x + ox * rect.w, y: rect.y + oy * rect.h };
 }
-
-/** A disc as drawn on screen: semi-axes in px, turn in degrees. */
-interface ScreenDisc {
-  rx: number;
-  ry: number;
-  angle: number;
-}
-
-// The screen size of the photo's disc of radius r (image-height units) at
-// (sx, sy). The transform scales each axis on its own (Aspect, Perspective),
-// so a dab that paints round in the photo can be an ellipse on screen: its
-// axes are the singular values of the map the disc's two radii go through.
-function discOnScreen(toScreen: (sx: number, sy: number) => { x: number; y: number }, sx: number, sy: number, r: number, imageAspect: number): ScreenDisc {
-  const c = toScreen(sx, sy);
-  const ex = toScreen(sx + r / imageAspect, sy);
-  const ey = toScreen(sx, sy + r);
-  const m00 = ex.x - c.x, m01 = ey.x - c.x, m10 = ex.y - c.y, m11 = ey.y - c.y;
-  const e = (m00 + m11) / 2, f = (m00 - m11) / 2, g = (m10 + m01) / 2, h = (m10 - m01) / 2;
-  const q = Math.hypot(e, h), w = Math.hypot(f, g);
-  const angle = ((Math.atan2(g, f) + Math.atan2(h, e)) / 2) * (180 / Math.PI);
-  return { rx: q + w, ry: Math.abs(q - w), angle };
-}
-
-// A small radius to measure the transform's local scale with; the ring scales
-// it to the brush size, so resizing the brush maps nothing.
-const PROBE_RADIUS = 0.01;
 
 const HIT = 13; // px handle hit radius (generous grips)
 const ROT_OFFSET = 0.06; // rotate-handle gap beyond the ellipse top (q-units)
@@ -97,7 +65,7 @@ type HandleId =
   | "linear-p0"
   | "linear-p1";
 
-type DragKind = "create-radial" | "create-linear" | "brush" | HandleId;
+type DragKind = "create-radial" | "create-linear" | "brush" | "extension" | HandleId;
 
 interface DragState {
   kind: DragKind;
@@ -106,6 +74,8 @@ interface DragState {
   downSrc: { x: number; y: number };
   lastDab?: { x: number; y: number };
   fromCenter?: boolean;
+  /** The history step a click ends with. */
+  commitLabel?: string;
 }
 
 // The view's mapping from source UV to the canvas. Screen-proportional ("q")
@@ -189,6 +159,7 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
   const editCrop = useDevelopStore((s) => s.params.crop);
   const { region, imageAspect, rect: bufferRect } = api.develop.useDevelopOverlay();
   const tool = useMaskTool();
+  const kinds = useExtensionKinds();
   const { activeTool, maskToolType, selectedMaskId, selectedComponentId } = tool;
   const [pointer] = React.useState(pointerStore);
   const [hovered, setHovered] = React.useState<HandleId | null>(null);
@@ -215,8 +186,7 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
     const oy = (py - rect.y) / rect.h;
     return mat3Apply(inv, crop.x + ox * crop.width, crop.y + oy * crop.height);
   };
-  const frameXY = (e: ReactPointerEvent) =>
-    frameLocalPoint(e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY);
+  const frameXY = (e: ReactPointerEvent) => api.develop.framePoint(e.currentTarget, e.clientX, e.clientY);
   const store = useDevelopStore.getState;
 
   const selectedMask = masks.find((m) => m.id === selectedMaskId) ?? null;
@@ -285,6 +255,29 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
     void store().commitEdit("Colour Range Pick");
   }
 
+  // A click with an extension's kind armed: its point goes to the selected
+  // component of that kind, or starts a component (in a new mask, or the
+  // selected one). A click off the photo, or a kind not registered, does nothing.
+  function placePoint(kind: RegisteredMaskComponentKind, down: { x: number; y: number }, e: ReactPointerEvent, t: MaskTool) {
+    if (down.x < 0 || down.x > 1 || down.y < 0 || down.y > 1) return;
+    const point = { u: down.x, v: down.y, alt: e.altKey, shift: e.shiftKey };
+    const commitLabel = kind.commitLabel ?? kind.label;
+    const target = resolveTarget(t);
+    const extending = target !== "new" && selectedMask?.id === target && selectedComp?.extension?.type === kind.type;
+    if (extending && selectedMask && selectedComp?.extension) {
+      const values = kind.onPoint?.(selectedComp.extension.values, point);
+      if (!values) return;
+      updateComponent(selectedMask.id, selectedComp.id, { extension: { type: kind.type, values } });
+      dragRef.current = { kind: "extension", maskId: selectedMask.id, compId: selectedComp.id, downSrc: down, commitLabel };
+      return;
+    }
+    const values = kind.onPoint?.(kind.create(), point) ?? kind.create();
+    const added = addExtensionComponent(target, { type: kind.type, values }, kind.label, target === "new" ? "add" : t.maskCompMode);
+    if (!added) return;
+    setMaskTool({ maskAddTarget: "current" });
+    dragRef.current = { kind: "extension", maskId: added.maskId, compId: added.compId, downSrc: down, commitLabel };
+  }
+
   const onPointerDown = (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     const { x: px, y: py } = frameXY(e);
@@ -306,6 +299,13 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
     const handle = hitSelectedComponent(px, py);
     if (handle && selectedMask && selectedComp) {
       dragRef.current = { kind: handle, maskId: selectedMask.id, compId: selectedComp.id, downSrc: down };
+      return;
+    }
+
+    // An extension's kind takes a click rather than a drag.
+    if (maskToolType !== "brush" && maskToolType !== "radial" && maskToolType !== "linear") {
+      const kind = kinds.find((k) => k.type === maskToolType);
+      if (kind) placePoint(kind, down, e, t);
       return;
     }
 
@@ -533,17 +533,10 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
       setMaskTool({ selectedMaskId: null, selectedComponentId: null });
       return;
     }
-    void store().commitEdit("Mask");
+    void store().commitEdit(d.commitLabel ?? "Mask");
   };
 
   const Outlines = memoOutlines();
-  // Screen px per image-height unit of a dab at the view's centre: the brush
-  // ring keeps it while it follows the pointer, so a hover maps nothing.
-  const ringScale = React.useMemo(() => {
-    const c = toSource(rect.x + rect.w / 2, rect.y + rect.h / 2);
-    const d = discOnScreen(toScreen, c.x, c.y, PROBE_RADIUS, imageAspect);
-    return { rx: d.rx / PROBE_RADIUS, ry: d.ry / PROBE_RADIUS, angle: d.angle };
-  }, [rect, crop, forward, inv, imageAspect]);
 
   return (
     <div
@@ -566,10 +559,11 @@ export function MaskCanvas({ rect: given }: { rect: Rect }) {
             crop={crop}
             forward={forward}
             imageAspect={imageAspect}
+            kinds={kinds}
           />
         )}
-        <ToolCursors pointer={pointer} rect={rect} ringScale={ringScale} />
       </svg>
+      <ToolCursors pointer={pointer} />
     </div>
   );
 }
@@ -583,9 +577,10 @@ interface MaskOutlinesProps {
   crop: CropRect;
   forward: Mat3;
   imageAspect: number;
+  kinds: readonly RegisteredMaskComponentKind[];
 }
 
-function MaskOutlines({ masks, selectedMaskId, selectedComponentId, hovered, rect, crop, forward, imageAspect }: MaskOutlinesProps) {
+function MaskOutlines({ masks, selectedMaskId, selectedComponentId, hovered, rect, crop, forward, imageAspect, kinds }: MaskOutlinesProps) {
   const { toScreen, radialHandle, rotatedEllipsePath } = maskView(rect, crop, forward, imageAspect);
   return (
     <>
@@ -640,6 +635,29 @@ function MaskOutlines({ masks, selectedMaskId, selectedComponentId, hovered, rec
               </g>
             );
           }
+          if (c.kind === "extension" && c.extension && selComp) {
+            const { type, values } = c.extension;
+            const markers = kinds.find((k) => k.type === type)?.markers?.(values) ?? [];
+            return (
+              <g key={key}>
+                {markers.map((p, i) => {
+                  const at = toScreen(p.u, p.v);
+                  return (
+                    <circle
+                      key={i}
+                      data-marker=""
+                      cx={Number(at.x.toFixed(1))}
+                      cy={Number(at.y.toFixed(1))}
+                      r={5}
+                      fill="rgba(0,0,0,0.25)"
+                      stroke={p.subtract ? COLOR.sub : COLOR.add}
+                      strokeWidth={1.8}
+                    />
+                  );
+                })}
+              </g>
+            );
+          }
           return null;
         }),
       )}
@@ -654,75 +672,27 @@ let MemoOutlines: ComponentType<MaskOutlinesProps> | null = null;
 // with the React the host injects.
 const memoOutlines = () => (MemoOutlines ??= React.memo(MaskOutlines));
 
-interface ToolCursorsProps {
-  pointer: PointerStore;
-  rect: Rect;
-  ringScale: ScreenDisc;
-}
-
-// Re-renders on every pointer move, so it holds only what follows the pointer
-// or is cheap to draw.
-function ToolCursors({ pointer, rect, ringScale }: ToolCursorsProps) {
+// Re-renders on every pointer move, so it holds only what follows the pointer.
+function ToolCursors({ pointer }: { pointer: PointerStore }) {
   const { at } = React.useSyncExternalStore(pointer.subscribe, pointer.get);
   const { activeTool, maskToolType, brushErase, maskCompMode, brushSize, brushFeather, brushPreview } = useMaskTool();
-
-  const brushing = activeTool === "mask" && maskToolType === "brush";
-  const brushRing = brushing ? at : null;
-  // Reactive so the cursor ring resizes the instant [ / ] change the size.
-  const ring = (x: number, y: number, scale: number, min: number) => ({
-    cx: x,
-    cy: y,
-    rx: Math.max(min, ringScale.rx * brushSize * scale),
-    ry: Math.max(min, ringScale.ry * brushSize * scale),
-    transform: `rotate(${ringScale.angle} ${x} ${y})`,
-  });
-  const subErase = at?.alt || brushErase || maskCompMode === "subtract";
-  // Centre reference circle shown while a brush slider is dragged.
-  const showBrushRef = brushPreview && brushing;
-  const refCx = rect.x + rect.w / 2;
-  const refCy = rect.y + rect.h / 2;
-  const ringColour = subErase ? "#ff6b6b" : "#fff";
-
+  if (activeTool !== "mask" || maskToolType !== "brush") return null;
+  const { BrushCursor } = api.develop;
   return (
     <>
-      {brushRing && (
-        <g>
-          <ellipse
-            {...ring(brushRing.x, brushRing.y, 1, 3)}
-            fill="none"
-            stroke={ringColour}
-            strokeWidth={1.2}
-            strokeDasharray={subErase ? "4 3" : undefined}
-            opacity={0.9}
-          />
-          {/* Inner ring shows the feathered core. */}
-          <ellipse {...ring(brushRing.x, brushRing.y, 1 - brushFeather, 1)} fill="none" stroke={ringColour} strokeWidth={0.6} opacity={0.4} />
-        </g>
+      {at && (
+        <BrushCursor
+          at={{ x: at.x, y: at.y }}
+          size={brushSize}
+          feather={brushFeather}
+          erase={at.alt || brushErase || maskCompMode === "subtract"}
+        />
       )}
-      {/* Centre reference while dragging the brush sliders. */}
-      {showBrushRef && (
-        <g opacity={0.8}>
-          <ellipse {...ring(refCx, refCy, 1, 3)} fill="none" stroke="#fff" strokeWidth={1.2} />
-          <ellipse {...ring(refCx, refCy, 1 - brushFeather, 1)} fill="none" stroke="#fff" strokeWidth={0.6} opacity={0.5} />
-        </g>
-      )}
+      {/* The reference while a brush slider is dragged. */}
+      {brushPreview && <BrushCursor at="centre" size={brushSize} feather={brushFeather} />}
     </>
   );
 }
-
-type BrushSetting = "brushSize" | "brushFeather" | "brushOpacity" | "brushFlow";
-
-// Each brush shortcut's setting, step, range and rounding.
-const BRUSH_STEPS: Record<string, { key: BrushSetting; step: number; min: number; max: number; digits: number }> = {
-  "brush.smaller": { key: "brushSize", step: -0.01, min: 0.01, max: 0.5, digits: 3 },
-  "brush.larger": { key: "brushSize", step: 0.01, min: 0.01, max: 0.5, digits: 3 },
-  "brush.featherDown": { key: "brushFeather", step: -0.05, min: 0, max: 1, digits: 2 },
-  "brush.featherUp": { key: "brushFeather", step: 0.05, min: 0, max: 1, digits: 2 },
-  "brush.opacityDown": { key: "brushOpacity", step: -0.1, min: 0.01, max: 1, digits: 2 },
-  "brush.opacityUp": { key: "brushOpacity", step: 0.1, min: 0.01, max: 1, digits: 2 },
-  "brush.flowDown": { key: "brushFlow", step: -0.1, min: 0.01, max: 1, digits: 2 },
-  "brush.flowUp": { key: "brushFlow", step: 0.1, min: 0.01, max: 1, digits: 2 },
-};
 
 // Whether the tool takes `action` now; with `run`, take it. The brush size
 // keys size only the armed brush; Delete removes the selected component,
@@ -737,12 +707,17 @@ function takeAction(action: string, run: boolean): boolean {
     }
     return true;
   }
-  const s = BRUSH_STEPS[action];
-  if (!s) return false;
-  if (s.key === "brushSize" && !(t.activeTool === "mask" && t.maskToolType === "brush")) return false;
+  const step = api.develop.brush.step(action, {
+    size: t.brushSize,
+    feather: t.brushFeather,
+    opacity: t.brushOpacity,
+    flow: t.brushFlow,
+  });
+  if (!step) return false;
+  if (step.key === "size" && !(t.activeTool === "mask" && t.maskToolType === "brush")) return false;
   if (run) {
     const patch: Partial<MaskTool> = {};
-    patch[s.key] = Math.max(s.min, Math.min(s.max, Number((t[s.key] + s.step).toFixed(s.digits))));
+    patch[BRUSH_KEYS[step.key]] = step.value;
     setMaskTool(patch);
   }
   return true;

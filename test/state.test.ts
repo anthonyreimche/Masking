@@ -32,6 +32,15 @@ beforeEach(() => {
   resetMaskTool();
 });
 
+describe("resetMaskTool", () => {
+  it("starts the brush from the official brush's defaults", () => {
+    rig = fakeApi({ brushDefaults: { size: 0.12, feather: 0.3, opacity: 0.9, flow: 0.7 } });
+    initRuntime(rig.api);
+    resetMaskTool();
+    expect(maskTool()).toMatchObject({ brushSize: 0.12, brushFeather: 0.3, brushOpacity: 0.9, brushFlow: 0.7 });
+  });
+});
+
 describe("addRangeComponent", () => {
   it("creates a new mask when none is selected", () => {
     addRangeComponent("lumRange");

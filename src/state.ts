@@ -10,12 +10,13 @@
 // ends a gesture for undo, and the panel or the canvas calls it.
 
 import { React, api } from "./rt";
-import type { BrushDab, Mask, MaskComponent, MaskComponentMode, MaskType } from "./safelight";
+import type { BrushDab, BrushSetting, Mask, MaskComponent, MaskComponentExtension, MaskComponentMode, MaskType, RegisteredMaskComponentKind } from "./safelight";
 import { DEFAULT_MASK_PANELS, MAX_MASKS, defaultColorRange, defaultLumRange, defaultMaskAdjustments } from "./masks";
 
 export interface MaskTool {
   activeTool: "none" | "mask";
-  maskToolType: MaskType;
+  /** A drawn kind, or an extension kind's type ("{extensionId}.{name}"). */
+  maskToolType: MaskType | string;
   /** Whether the next created component adds or subtracts. */
   maskCompMode: MaskComponentMode;
   /** Start a fresh mask, or extend the selected one. */
@@ -42,7 +43,15 @@ export interface MaskTool {
   maskColorPicking: boolean;
 }
 
-const INITIAL: MaskTool = {
+/** The brush's settings by the official brush's names. */
+export const BRUSH_KEYS = {
+  size: "brushSize",
+  feather: "brushFeather",
+  opacity: "brushOpacity",
+  flow: "brushFlow",
+} as const satisfies Record<BrushSetting, keyof MaskTool>;
+
+const VIEW: Omit<MaskTool, "brushSize" | "brushFeather" | "brushOpacity" | "brushFlow"> = {
   activeTool: "none",
   maskToolType: "radial",
   maskCompMode: "add",
@@ -52,15 +61,18 @@ const INITIAL: MaskTool = {
   hoveredMaskId: null,
   maskTab: "coverage",
   brushPreview: false,
-  brushSize: 0.08,
-  brushFeather: 0.5,
-  brushOpacity: 1,
-  brushFlow: 1,
   brushErase: false,
   maskColorPicking: false,
 };
 
-let tool: MaskTool = INITIAL;
+function initial(): MaskTool {
+  const brush = api.develop.brush.defaults;
+  return { ...VIEW, brushSize: brush.size, brushFeather: brush.feather, brushOpacity: brush.opacity, brushFlow: brush.flow };
+}
+
+// The brush starts from the host's defaults, so the tool has no state until
+// activate() calls resetMaskTool().
+let tool!: MaskTool;
 const listeners = new Set<() => void>();
 
 export const maskTool = (): MaskTool => tool;
@@ -70,7 +82,7 @@ export function setMaskTool(partial: Partial<MaskTool>): void {
   for (const listener of listeners) listener();
 }
 
-export const resetMaskTool = () => setMaskTool(INITIAL);
+export const resetMaskTool = () => setMaskTool(initial());
 
 export const subscribeMaskTool = (listener: () => void) => {
   listeners.add(listener);
@@ -182,6 +194,62 @@ export function addRangeComponent(kind: "lumRange" | "colorRange"): void {
 export function addBrushDab(maskId: string, compId: string, dab: BrushDab): void {
   mapComponents(maskId, (components) =>
     components.map((c) => (c.id === compId && c.brush ? { ...c, brush: { ...c.brush, dabs: [...c.brush.dabs, dab] } } : c)),
+  );
+}
+
+/** Extension components a photo renders: one per RGBA channel of their raster. */
+export const MAX_EXTENSION_MASK_COMPONENTS = 4;
+
+const NO_KINDS: readonly RegisteredMaskComponentKind[] = [];
+
+/** React hook: the kinds extensions registered; none on a Safelight without them. */
+export const useExtensionKinds = (): readonly RegisteredMaskComponentKind[] => api.develop.useMaskComponentKinds?.() ?? NO_KINDS;
+
+/** React hook: whether the installed extensions have finished starting; true on
+ *  a Safelight that doesn't say. */
+export const useExtensionsSettled = (): boolean => api.extensions?.useSettled() ?? true;
+
+/** How many extension components the photo's masks hold, which render up to
+ *  MAX_EXTENSION_MASK_COMPONENTS. */
+export const countExtensionComponents = (all: readonly Mask[]): number =>
+  all.reduce((n, m) => n + m.components.filter((c) => c.kind === "extension").length, 0);
+
+/** Add an extension component: to mask `target`, or with "new" as a mask named
+ *  `name`, and select it. Null when the photo is at the extension component
+ *  cap, or at the mask cap for a new mask. */
+export function addExtensionComponent(
+  target: "new" | string,
+  extension: MaskComponentExtension,
+  name: string,
+  mode: MaskComponentMode,
+): { maskId: string; compId: string } | null {
+  if (countExtensionComponents(masks()) >= MAX_EXTENSION_MASK_COMPONENTS) return null;
+  const comp: MaskComponent = { id: genId("comp"), kind: "extension", mode, invert: false, extension };
+  if (target !== "new") {
+    addComponent(target, comp);
+    return { maskId: target, compId: comp.id };
+  }
+  if (masks().length >= MAX_MASKS) return null;
+  const mask: Mask = {
+    id: genId("mask"),
+    name,
+    visible: true,
+    invert: false,
+    opacity: 100,
+    adj: defaultMaskAdjustments(),
+    panels: [...DEFAULT_MASK_PANELS],
+    components: [comp],
+  };
+  addMask(mask);
+  return { maskId: mask.id, compId: comp.id };
+}
+
+/** Merge `patch` into an extension component's values; its type stays. */
+export function updateExtensionValues(maskId: string, compId: string, patch: Record<string, unknown>): void {
+  mapComponents(maskId, (components) =>
+    components.map((c) =>
+      c.id === compId && c.extension ? { ...c, extension: { ...c.extension, values: { ...c.extension.values, ...patch } } } : c,
+    ),
   );
 }
 

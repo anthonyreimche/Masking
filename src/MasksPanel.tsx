@@ -10,17 +10,34 @@
 
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { React, api } from "./rt";
-import type { Mask, MaskComponent, MaskComponentKind, MaskComponentMode, MaskPanelEntry, MaskType } from "./safelight";
+import type { ComponentType, ErrorInfo, ReactNode } from "react";
+import type {
+  BrushSetting,
+  ContextMenuEntry,
+  Mask,
+  MaskComponent,
+  MaskComponentControlsProps,
+  MaskComponentMode,
+  MaskPanelEntry,
+  MaskType,
+  RegisteredMaskComponentKind,
+} from "./safelight";
 import { MAX_MASKS, defaultMaskAdjustments } from "./masks";
 import {
   addRangeComponent,
+  BRUSH_KEYS,
+  countExtensionComponents,
   cycleComponentMode,
   leaveMaskTool,
+  MAX_EXTENSION_MASK_COMPONENTS,
   removeComponent,
   removeMask,
   renameMask,
   setMaskTool,
   updateComponent,
+  updateExtensionValues,
+  useExtensionKinds,
+  useExtensionsSettled,
   useMaskTool,
   type MaskTool,
 } from "./state";
@@ -41,20 +58,37 @@ const RANGE_TOOLS: { kind: "lumRange" | "colorRange"; label: string }[] = [
   { kind: "colorRange", label: "Colour Range" },
 ];
 
-const KIND_ICON: Record<MaskComponentKind, string> = {
+const KIND_ICON: Record<MaskType | "lumRange" | "colorRange", string> = {
   radial: "◯",
   linear: "▤",
   brush: "✎",
   lumRange: "◐",
   colorRange: "⬤",
 };
-const KIND_LABEL: Record<MaskComponentKind, string> = {
+const KIND_LABEL: Record<MaskType | "lumRange" | "colorRange", string> = {
   radial: "Radial",
   linear: "Linear",
   brush: "Brush",
   lumRange: "Luminance",
   colorRange: "Colour",
 };
+// An extension kind that brings no icon of its own.
+const EXTENSION_ICON = "✧";
+const NOT_INSTALLED = "(not installed)";
+
+type Kinds = readonly RegisteredMaskComponentKind[];
+
+/** What a component is told apart by: a drawn kind's name, an extension's type. */
+const kindKey = (c: MaskComponent): string => (c.kind === "extension" ? (c.extension?.type ?? c.kind) : c.kind);
+
+const isBuiltIn = (key: string): key is keyof typeof KIND_ICON => key in KIND_ICON;
+const registered = (kinds: Kinds, type: string) => kinds.find((k) => k.type === type);
+
+const kindIcon = (key: string, kinds: Kinds): string =>
+  isBuiltIn(key) ? KIND_ICON[key] : (registered(kinds, key)?.icon ?? EXTENSION_ICON);
+// A kind still missing before extensions have started is named by its type's last segment.
+const kindLabel = (key: string, kinds: Kinds, settled: boolean): string =>
+  isBuiltIn(key) ? KIND_LABEL[key] : (registered(kinds, key)?.label ?? (settled ? NOT_INSTALLED : key.slice(key.lastIndexOf(".") + 1)));
 
 // Mode chip glyph + colour. add = union, subtract = carve, intersect = confine.
 const MODE_GLYPH: Record<MaskComponentMode, string> = {
@@ -75,6 +109,11 @@ const MODE_TITLE: Record<MaskComponentMode, string> = {
 
 const on = (yes: boolean) => (yes ? ` ${cls.on}` : "");
 
+const MASK_TABS = [
+  { value: "coverage", label: "Coverage" },
+  { value: "adjust", label: "Adjust" },
+];
+
 // One active sub-panel card: header (title + remove) around the panel's
 // per-mask component, which talks to the mask through the surrounding scope.
 function MaskSubPanel({ def, onRemove }: { def: MaskPanelEntry; onRemove: () => void }) {
@@ -93,7 +132,8 @@ function MaskSubPanel({ def, onRemove }: { def: MaskPanelEntry; onRemove: () => 
 }
 
 export function MasksPanel() {
-  const { Panel, Slider, MaskScope } = api.components;
+  const { Panel, Slider, MaskScope, ContextMenu } = api.components;
+  const { Button, SegmentedControl } = api.ui;
   const useDevelopStore = api.stores.useDevelopStore;
   const masks = useDevelopStore((s) => s.params.masks);
   const commitEdit = useDevelopStore((s) => s.commitEdit);
@@ -104,6 +144,10 @@ export function MasksPanel() {
   // An extension's values run its stage inside the mask only at the current
   // processing; a photo with older processing renders as it always has.
   const olderProcessing = api.develop.useOlderProcessing();
+  // Extension components draw from a raster the frozen first processing never reads.
+  const firstProcessing = useDevelopStore((s) => (s.params.processVersion ?? 1) < 2);
+  const kinds = useExtensionKinds();
+  const settled = useExtensionsSettled();
   const panelDefs = api.develop.useMaskPanels();
   const held = api.develop.useCanvasToolHeld();
   const tool = useMaskTool();
@@ -121,21 +165,19 @@ export function MasksPanel() {
   const selected = masks.find((m) => m.id === selectedMaskId) ?? null;
   const selectedComp = selected?.components.find((c) => c.id === selectedComponentId) ?? null;
 
-  const [addOpen, setAddOpen] = React.useState(false);
-  const [createOpen, setCreateOpen] = React.useState(false);
+  const [menu, setMenu] = React.useState<{ pick: (kind: string) => void; x: number; y: number } | null>(null);
   const [renaming, setRenaming] = React.useState<{ id: string; value: string } | null>(null);
 
   // Arm a geometric tool to extend the selected mask (or start fresh if none).
-  const armTool = (t: MaskType, mode: MaskComponentMode) =>
+  const armTool = (t: string, mode: MaskComponentMode) =>
     setMaskTool({ maskToolType: t, maskCompMode: mode, maskAddTarget: selected ? "current" : "new", activeTool: "mask" });
 
   // Start a brand-new mask with a geometric tool (drag on canvas to draw).
-  const newMaskTool = (t: MaskType) =>
+  const newMaskTool = (t: string) =>
     setMaskTool({ selectedMaskId: null, maskToolType: t, maskCompMode: "add", maskAddTarget: "new", activeTool: "mask" });
 
   // "Create Mask" menu: a fresh mask of any kind.
-  const createMask = (kind: MaskComponentKind) => {
-    setCreateOpen(false);
+  const createMask = (kind: string) => {
     setMaskTool({ maskTab: "coverage" });
     if (kind === "lumRange" || kind === "colorRange") {
       setMaskTool({ selectedMaskId: null });
@@ -147,8 +189,7 @@ export function MasksPanel() {
   };
 
   // "+ Add Component" menu: append a component to the selected mask.
-  const addToSelected = (kind: MaskComponentKind) => {
-    setAddOpen(false);
+  const addToSelected = (kind: string) => {
     if (kind === "lumRange" || kind === "colorRange") {
       addRangeComponent(kind);
       void commitEdit("Add Component");
@@ -160,6 +201,21 @@ export function MasksPanel() {
       armTool(kind, "add");
     }
   };
+
+  // Either menu opens just under the button that opened it.
+  const openMenu = (pick: (kind: string) => void) => (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu({ pick, x: r.left, y: r.bottom });
+  };
+
+  // Why the extension kinds can't be picked now, if they can't.
+  const extensionHold = firstProcessing
+    ? `Needs the current processing: use ${UPDATE_PROCESSING_LABEL} on this photo first`
+    : countExtensionComponents(masks) >= MAX_EXTENSION_MASK_COMPONENTS
+      ? `A photo holds at most ${MAX_EXTENSION_MASK_COMPONENTS} of these`
+      : undefined;
+  // The extension kind the click tool is armed with, while it is.
+  const armedKind = masking ? registered(kinds, maskToolType) : undefined;
 
   const notApplied = (def: MaskPanelEntry): boolean => olderProcessing && def.extensionParams;
   const activeDefs = selected ? panelDefs.filter((d) => selected.panels.includes(d.id)) : [];
@@ -195,9 +251,15 @@ export function MasksPanel() {
 
   const editComp = (m: Mask, c: MaskComponent) => {
     setMaskTool({ selectedMaskId: m.id, selectedComponentId: c.id });
-    if (c.kind === "radial" || c.kind === "linear" || c.kind === "brush") {
+    const armed =
+      c.kind === "radial" || c.kind === "linear" || c.kind === "brush"
+        ? c.kind
+        : c.extension && registered(kinds, c.extension.type)
+          ? c.extension.type
+          : null;
+    if (armed) {
       setMaskTool({
-        maskToolType: c.kind,
+        maskToolType: armed,
         maskCompMode: c.mode === "subtract" ? "subtract" : "add",
         maskAddTarget: "current",
         activeTool: "mask",
@@ -206,9 +268,9 @@ export function MasksPanel() {
   };
 
   // Distinct component kinds in a mask, for the list-row icon summary.
-  const kindSummary = (m: Mask): MaskComponentKind[] => {
-    const seen: MaskComponentKind[] = [];
-    for (const c of m.components) if (!seen.includes(c.kind)) seen.push(c.kind);
+  const kindSummary = (m: Mask): string[] => {
+    const seen: string[] = [];
+    for (const c of m.components) if (!seen.includes(kindKey(c))) seen.push(kindKey(c));
     return seen;
   };
 
@@ -219,55 +281,54 @@ export function MasksPanel() {
     setMaskTool({ selectedMaskId: null, selectedComponentId: null, hoveredMaskId: null });
   };
 
-  const brushSlider = (label: string, key: "brushSize" | "brushFeather" | "brushOpacity" | "brushFlow", min: number, defaultValue: number) => (
-    <Slider
-      label={label}
-      value={Math.round(tool[key] * 100)}
-      min={min}
-      max={key === "brushSize" ? 50 : 100}
-      step={1}
-      defaultValue={defaultValue}
-      onChange={(v) => {
-        const patch: Partial<MaskTool> = { brushPreview: true };
-        patch[key] = v / 100;
-        setMaskTool(patch);
-      }}
-      onCommit={() => setMaskTool({ brushPreview: false })}
-    />
-  );
+  const brushSlider = (label: string, setting: BrushSetting, min: number) => {
+    const key = BRUSH_KEYS[setting];
+    return (
+      <Slider
+        label={label}
+        value={Math.round(tool[key] * 100)}
+        min={min}
+        max={setting === "size" ? 50 : 100}
+        step={1}
+        defaultValue={Math.round(api.develop.brush.defaults[setting] * 100)}
+        onChange={(v) => {
+          const patch: Partial<MaskTool> = { brushPreview: true };
+          patch[key] = v / 100;
+          setMaskTool(patch);
+        }}
+        onCommit={() => setMaskTool({ brushPreview: false })}
+      />
+    );
+  };
 
   return (
     <Panel title="Masking" defaultOpen>
       <div className={cls.panel} onClick={deselectOnBackground}>
         {/* Create new mask */}
-        <div className={cls.menuAnchor}>
-          <button
-            type="button"
-            onClick={() => {
-              setCreateOpen((v) => !v);
-              setAddOpen(false);
-            }}
-            disabled={atMaskCap}
-            title={atMaskCap ? `Mask limit reached (${MAX_MASKS})` : undefined}
-            className={cls.create}
-          >
-            + Create Mask ▾
-          </button>
-          {createOpen && <ToolMenu onPick={(k) => createMask(k)} onClose={() => setCreateOpen(false)} />}
-        </div>
+        <Button
+          full
+          onClick={openMenu(createMask)}
+          disabled={atMaskCap}
+          title={atMaskCap ? `Mask limit reached (${MAX_MASKS})` : undefined}
+        >
+          + Create Mask ▾
+        </Button>
+        {menu && <ContextMenu x={menu.x} y={menu.y} items={kindItems(menu.pick, kinds, extensionHold)} onClose={() => setMenu(null)} />}
 
         <div className={cls.head}>
-          <span className={cls.hint}>
-            {masking
-              ? maskToolType === "brush"
-                ? `Paint to ${maskCompMode === "subtract" ? "subtract" : "add"}`
-                : `Drag to ${maskCompMode === "subtract" ? "subtract" : "add"} a ${maskToolType}`
-              : `${masks.length}/${MAX_MASKS} masks`}
+          <span className={cls.hint} title={armedKind ? "Click the photo to place a point" : undefined}>
+            {armedKind
+              ? armedKind.label
+              : masking
+                ? maskToolType === "brush"
+                  ? `Paint to ${maskCompMode === "subtract" ? "subtract" : "add"}`
+                  : `Drag to ${maskCompMode === "subtract" ? "subtract" : "add"} a ${maskToolType}`
+                : `${masks.length}/${MAX_MASKS} masks`}
           </span>
           {masking && (
-            <button type="button" onClick={leaveMaskTool} className={cls.done}>
+            <Button size="sm" onClick={leaveMaskTool}>
               Done
-            </button>
+            </Button>
           )}
         </div>
 
@@ -275,10 +336,10 @@ export function MasksPanel() {
             before the first stroke of a new brush mask. */}
         {masking && maskToolType === "brush" && (
           <div className={cls.brush}>
-            {brushSlider("Size", "brushSize", 1, 8)}
-            {brushSlider("Feather", "brushFeather", 0, 50)}
-            {brushSlider("Opacity", "brushOpacity", 1, 100)}
-            {brushSlider("Flow", "brushFlow", 1, 100)}
+            {brushSlider("Size", "size", 1)}
+            {brushSlider("Feather", "feather", 0)}
+            {brushSlider("Opacity", "opacity", 1)}
+            {brushSlider("Flow", "flow", 1)}
             <label className={cls.erase}>
               <input
                 type="checkbox"
@@ -322,7 +383,7 @@ export function MasksPanel() {
                   >
                     {visible ? "◉" : "○"}
                   </button>
-                  <span className={cls.kinds}>{kindSummary(m).map((k) => KIND_ICON[k]).join(" ")}</span>
+                  <span className={cls.kinds}>{kindSummary(m).map((k) => kindIcon(k, kinds)).join(" ")}</span>
                   {renaming?.id === m.id ? (
                     <input
                       autoFocus
@@ -387,13 +448,12 @@ export function MasksPanel() {
         {/* Selected mask editor: Coverage / Adjust tabs */}
         {selected && (
           <div className={cls.editor}>
-            <div className={cls.tabs}>
-              {(["coverage", "adjust"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => setMaskTool({ maskTab: t })} className={cls.tab + on(tab === t)}>
-                  {t}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              size="sm"
+              value={tab}
+              onChange={(t) => setMaskTool({ maskTab: t === "adjust" ? "adjust" : "coverage" })}
+              options={MASK_TABS}
+            />
 
             {tab === "coverage" ? (
               <div className={cls.section}>
@@ -413,8 +473,10 @@ export function MasksPanel() {
                       >
                         {MODE_GLYPH[c.mode]}
                       </button>
-                      <span className={cls.icon}>{KIND_ICON[c.kind]}</span>
-                      <span className={cls.name}>{KIND_LABEL[c.kind]}</span>
+                      <span className={cls.icon}>{kindIcon(kindKey(c), kinds)}</span>
+                      <span className={cls.name} title={c.kind === "extension" && !registered(kinds, kindKey(c)) ? kindKey(c) : undefined}>
+                        {kindLabel(kindKey(c), kinds, settled)}
+                      </span>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -445,19 +507,9 @@ export function MasksPanel() {
                 </div>
 
                 {/* Add component to this mask */}
-                <div className={cls.menuAnchor}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddOpen((v) => !v);
-                      setCreateOpen(false);
-                    }}
-                    className={cls.addComponent}
-                  >
-                    + Add Component ▾
-                  </button>
-                  {addOpen && <ToolMenu onPick={(k) => addToSelected(k)} onClose={() => setAddOpen(false)} />}
-                </div>
+                <Button size="sm" full onClick={openMenu(addToSelected)}>
+                  + Add Component ▾
+                </Button>
 
                 {/* Selected-component geometry / range controls */}
                 {selectedComp && <ComponentControls key={selectedComp.id} maskId={selected.id} comp={selectedComp} />}
@@ -466,9 +518,9 @@ export function MasksPanel() {
               <div className={cls.section}>
                 <div className={cls.head}>
                   <span className={cls.caption}>Amount</span>
-                  <button type="button" onClick={resetAdj} title="Reset this mask's adjustments" className={cls.reset}>
+                  <Button variant="ghost" size="sm" onClick={resetAdj} title="Reset this mask's adjustments">
                     Reset
-                  </button>
+                  </Button>
                 </div>
                 <Slider
                   label="Opacity"
@@ -517,9 +569,9 @@ export function MasksPanel() {
                   <div className={cls.panels}>
                     <span className={cls.hint}>Adjust:</span>
                     {availablePanels.map((d) => (
-                      <button
+                      <Button
                         key={d.id}
-                        type="button"
+                        size="sm"
                         onClick={() => addPanel(d)}
                         disabled={notApplied(d)}
                         title={
@@ -527,10 +579,9 @@ export function MasksPanel() {
                             ? `${d.title} in a mask needs the current processing: use ${UPDATE_PROCESSING_LABEL} on this photo first`
                             : undefined
                         }
-                        className={cls.addPanel}
                       >
                         + {d.title}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 )}
@@ -543,28 +594,71 @@ export function MasksPanel() {
   );
 }
 
-// Dropdown listing every component kind (geometric + parametric ranges).
-function ToolMenu({ onPick, onClose }: { onPick: (kind: MaskComponentKind) => void; onClose: () => void }) {
+// Every component kind: the drawn ones, the parametric ranges, then the kinds
+// extensions registered, held back with `hold` as the reason when one can't be made.
+function kindItems(onPick: (kind: string) => void, kinds: Kinds, hold: string | undefined): ContextMenuEntry[] {
+  return [
+    ...GEO_TOOLS.map((t) => ({ label: t.label, icon: KIND_ICON[t.type], onClick: () => onPick(t.type) })),
+    "separator",
+    ...RANGE_TOOLS.map((t) => ({ label: t.label, icon: KIND_ICON[t.kind], onClick: () => onPick(t.kind) })),
+    ...(kinds.length === 0
+      ? []
+      : [
+          "separator" as const,
+          ...kinds.map((k) => ({
+            label: k.label,
+            icon: k.icon ?? EXTENSION_ICON,
+            onClick: () => onPick(k.type),
+            disabled: hold !== undefined,
+            title: hold,
+          })),
+        ]),
+  ];
+}
+
+// A kind's own controls are another extension's code: one that throws leaves
+// the panel as it was, logged once.
+interface ControlsBoundaryProps {
+  label: string;
+  children: ReactNode;
+}
+
+let ControlsBoundary: ComponentType<ControlsBoundaryProps> | null = null;
+
+// Made on first use, with the React the host injects.
+function controlsBoundary(): ComponentType<ControlsBoundaryProps> {
+  if (ControlsBoundary) return ControlsBoundary;
+  class Boundary extends React.Component<ControlsBoundaryProps, { failed: boolean }> {
+    state = { failed: false };
+    static getDerivedStateFromError() {
+      return { failed: true };
+    }
+    componentDidCatch(error: Error, _info: ErrorInfo) {
+      console.error(`Masking: the ${this.props.label} controls failed`, error);
+    }
+    render() {
+      return this.state.failed ? null : this.props.children;
+    }
+  }
+  ControlsBoundary = Boundary;
+  return Boundary;
+}
+
+function ExtensionControls({ maskId, comp, kind }: { maskId: string; comp: MaskComponent; kind: RegisteredMaskComponentKind }) {
+  const commitEdit = api.stores.useDevelopStore((s) => s.commitEdit);
+  const Controls: ComponentType<MaskComponentControlsProps> | undefined = kind.Controls;
+  if (!Controls || !comp.extension) return null;
+  const Boundary = controlsBoundary();
   return (
-    <>
-      {/* Click-away catcher. */}
-      <div className={cls.catcher} onClick={onClose} />
-      <div className={cls.menu}>
-        {GEO_TOOLS.map((t) => (
-          <button key={t.type} type="button" onClick={() => onPick(t.type)} className={cls.item}>
-            <span className={cls.itemIcon}>{KIND_ICON[t.type]}</span>
-            {t.label}
-          </button>
-        ))}
-        <div className={cls.divider} />
-        {RANGE_TOOLS.map((t) => (
-          <button key={t.kind} type="button" onClick={() => onPick(t.kind)} className={cls.item}>
-            <span className={cls.itemIcon}>{KIND_ICON[t.kind]}</span>
-            {t.label}
-          </button>
-        ))}
-      </div>
-    </>
+    <div className={cls.controls}>
+      <Boundary label={kind.label}>
+        <Controls
+          values={comp.extension.values}
+          setValues={(patch) => updateExtensionValues(maskId, comp.id, patch)}
+          commit={(label) => void commitEdit(label)}
+        />
+      </Boundary>
+    </div>
   );
 }
 
@@ -602,12 +696,19 @@ function GeoField({ label, title, value, onChange, onCommit }: GeoFieldProps) {
 // Geometry / range controls for the selected component.
 function ComponentControls({ maskId, comp }: { maskId: string; comp: MaskComponent }) {
   const { Slider } = api.components;
+  const { Button } = api.ui;
   const commitEdit = api.stores.useDevelopStore((s) => s.commitEdit);
   const { maskColorPicking } = useMaskTool();
+  const kinds = useExtensionKinds();
   // Numeric geometry fields are the keyboard/non-drag path — gated like the tone
   // curve's number row, so they only show with "Keyboard canvas editing" on.
   const kbd = api.accessibility.useKeyboardCanvasEditing();
   const commitGeo = () => void commitEdit("Mask Geometry");
+
+  if (comp.kind === "extension" && comp.extension) {
+    const kind = registered(kinds, comp.extension.type);
+    return kind ? <ExtensionControls maskId={maskId} comp={comp} kind={kind} /> : null;
+  }
 
   if (comp.kind === "radial" && comp.radial) {
     const r = comp.radial;
@@ -685,15 +786,15 @@ function ComponentControls({ maskId, comp }: { maskId: string; comp: MaskCompone
       <div className={cls.ranges}>
         <div className={cls.head}>
           <span className={cls.caption}>Colour range</span>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            active={maskColorPicking}
             onClick={() => setMaskTool({ activeTool: "mask", maskColorPicking: !maskColorPicking })}
             title="Pick a target colour from the image"
-            className={cls.pick + on(maskColorPicking)}
           >
             <span className={cls.swatch} style={{ backgroundColor: swatch }} />
             Pick
-          </button>
+          </Button>
         </div>
         <Slider label="Hue Range" value={uvToPct(g.hueRange)} min={0} max={100} step={1} defaultValue={15} onChange={(v) => set({ hueRange: v / 100 })} onCommit={commit} />
         <Slider label="Sat Range" value={uvToPct(g.satRange)} min={0} max={100} step={1} defaultValue={30} onChange={(v) => set({ satRange: v / 100 })} onCommit={commit} />
