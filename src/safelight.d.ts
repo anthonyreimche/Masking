@@ -239,6 +239,8 @@ export interface PanelContribution {
   title: string;
   component: ComponentType;
   defaultDock?: PanelDockDefault;
+  /** The modules the panel may be docked in; omitted, every module (Safelight 3.2.8). */
+  modules?: readonly string[];
   /** Right-clicking the panel's dock header offers "Reset to defaults". */
   onReset?: () => void;
 }

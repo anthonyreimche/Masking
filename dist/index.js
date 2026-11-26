@@ -1930,6 +1930,7 @@ function dt(e) {
 			width: 240,
 			height: 240
 		},
+		modules: ["develop"],
 		onReset: () => {
 			w({
 				selectedMaskId: null,

@@ -34,6 +34,7 @@ export function activate(host: SafelightAPI): void {
     title: "Masking",
     component: MasksPanel,
     defaultDock: { module: "develop", direction: "left", order: 0, width: 240, height: 240 },
+    modules: ["develop"],
     onReset: () => {
       setMaskTool({ selectedMaskId: null, selectedComponentId: null, hoveredMaskId: null });
       void host.stores.useDevelopStore.getState().resetParams(["masks"], "Reset Masking");
